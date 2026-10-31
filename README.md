@@ -1,20 +1,21 @@
 # Flutter UI Studio
 
 A visual desktop studio for building Flutter user interfaces. This repository is currently at
-**Phase 0 — Repository Foundation**: it provides the Tauri 2 + React + TypeScript application shell,
-tooling, and automated tests. The widget engine, canvas, project model, and Dart generation are
-deliberately not implemented yet.
+**Phase 1 — Project Workspace & File Explorer**: it provides the Tauri 2 + React + TypeScript
+application shell, a native Flutter project picker, and a read-only project file tree. The widget
+engine, canvas, code editor, and Dart generation are deliberately not implemented yet.
 
 ## Stack
 
-| Layer    | Technology                                |
-| -------- | ----------------------------------------- |
-| Shell    | Tauri 2                                   |
-| Frontend | React 19, TypeScript 5.9 (strict), Vite 8 |
-| Styling  | Plain CSS with design tokens              |
-| Backend  | Rust 2021 edition, MSVC toolchain         |
-| Tooling  | pnpm, ESLint 10 flat config, Prettier     |
-| Tests    | Vitest, Testing Library, `cargo test`     |
+| Layer    | Technology                                          |
+| -------- | --------------------------------------------------- |
+| Shell    | Tauri 2                                             |
+| Frontend | React 19, TypeScript 5.9 (strict), Vite 8           |
+| Styling  | Plain CSS with design tokens                        |
+| Backend  | Rust 2021 edition, MSVC toolchain                   |
+| Dialog   | `@tauri-apps/plugin-dialog` / `tauri-plugin-dialog` |
+| Tooling  | pnpm, ESLint 10 flat config, Prettier               |
+| Tests    | Vitest, Testing Library, `cargo test`               |
 
 ## Prerequisites
 
@@ -32,6 +33,16 @@ pnpm tauri dev
 
 The first Rust build downloads and compiles the Tauri dependency graph, so it can take several
 minutes.
+
+## Using the project workspace
+
+1. Select **Open project folder** in the explorer header, or **Open Flutter project** in the empty
+   state.
+2. Choose a folder containing a `pubspec.yaml`.
+3. Browse the project tree; folders load lazily when expanded.
+4. The last successfully opened project is remembered and restored on the next launch.
+
+The tree ignores `.git`, `.dart_tool`, and `build`. File contents are not opened in Phase 1.
 
 ## Scripts
 
@@ -62,14 +73,14 @@ src/
   features/
     editor/             Header, activity bar, editor area, status bar
     inspector/          Properties panel placeholder
-    project/            Project explorer placeholder
+    project/            Project picker, workspace hook, storage, lazy file tree
   shared/
     components/         Reusable presentational components
-    lib/                Tauri IPC wrapper and helpers
+    lib/                Tauri IPC wrappers and helpers
     styles/             Design tokens and global styles
   test/                 Test setup
 src-tauri/
-  src/commands/         Rust commands (currently `app_info`)
+  src/commands/         Rust commands (`app_info`, project workspace)
   capabilities/         Least-privilege Tauri capability file
   icons/                Generated application icons
 assets/                 Source artwork for generated icons
@@ -78,18 +89,21 @@ docs/                   Engineering plans and reports
 
 Features may depend on `shared`, never the reverse. Cross-feature composition lives in `app/`.
 
-## Phase 0 scope
+## Phase 1 scope
 
 Included:
 
-- Professional dark editor shell with explorer, editor area, inspector, and status bar.
-- Real Rust ↔ React integration through the `app_info` command.
-- Versioned, linted, formatted, and tested frontend and Rust configuration.
+- Native folder picker for choosing a Flutter project.
+- `pubspec.yaml` validation and project-name extraction in Rust.
+- Safe, project-relative directory listing with lazy explorer folders.
+- Last-project persistence and startup restoration.
+- Project context in the header, editor welcome surface, and status bar.
 
 Not included (future phases):
 
-- Project/file I/O, canvas rendering, widget engine, Dart generation, settings persistence,
-  command palette, custom title bar, and plugin support.
+- Opening or editing file contents, file watching, multi-root workspaces.
+- Canvas rendering, widget engine, Dart generation, settings UI, command palette, custom title bar,
+  and plugin support.
 
 ## License
 
