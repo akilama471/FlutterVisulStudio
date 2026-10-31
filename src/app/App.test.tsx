@@ -37,13 +37,21 @@ describe("App", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Toggle Explorer" }));
+    const explorerToggle = screen.getByRole("button", { name: "Toggle Explorer" });
+    const inspectorToggle = screen.getByRole("button", { name: "Toggle Inspector" });
+
+    expect(explorerToggle).toHaveAttribute("aria-pressed", "true");
+    expect(inspectorToggle).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(explorerToggle);
     expect(screen.queryByRole("complementary", { name: "Explorer" })).not.toBeInTheDocument();
+    expect(explorerToggle).toHaveAttribute("aria-pressed", "false");
 
-    await user.click(screen.getByRole("button", { name: "Toggle Inspector" }));
+    await user.click(inspectorToggle);
     expect(screen.queryByRole("complementary", { name: "Inspector" })).not.toBeInTheDocument();
+    expect(inspectorToggle).toHaveAttribute("aria-pressed", "false");
 
-    await user.click(screen.getByRole("button", { name: "Toggle Explorer" }));
+    await user.click(explorerToggle);
     expect(screen.getByRole("complementary", { name: "Explorer" })).toBeInTheDocument();
   });
 
@@ -62,6 +70,19 @@ describe("App", () => {
   });
 
   it("falls back to static metadata when the Tauri runtime is unavailable", async () => {
+    render(<App />);
+
+    expect(await screen.findByText("Tauri unavailable")).toBeInTheDocument();
+    expect(screen.getByText("v0.1.0")).toBeInTheDocument();
+  });
+
+  it("ignores malformed metadata returned by the Tauri command", async () => {
+    invokeMock.mockResolvedValue({
+      name: "Flutter UI Studio",
+      version: 42,
+      tauriVersion: null,
+    });
+
     render(<App />);
 
     expect(await screen.findByText("Tauri unavailable")).toBeInTheDocument();
