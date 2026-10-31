@@ -5,19 +5,19 @@ Status: Approved plan for Phase 0 only
 
 ## 1. Repository & environment findings
 
-| Item | Finding | Action |
-| --- | --- | --- |
-| Branch | `main`, single initial commit | Work incrementally on `main` with one commit per completed step |
-| Existing files | `LICENSE` (GPL-3.0), `.gitignore`, `.gitattributes`, `paln.md` | Preserve; extend `.gitignore` only where required |
-| `AGENTS.md` | **Not present** (root and recursive search) | No extra repository instructions exist; this plan governs Phase 0 |
-| Architecture docs | None found; `paln.md` states "Tauri 2 + React + TypeScript" | Use the stack below as the approved baseline |
-| Node.js | v24.22.1 | Use for tooling |
-| npm | 12.2.1 | Bootstrap only; project uses pnpm |
-| corepack | 0.36.0, pnpm 12.16.1 resolvable | Pin package manager with `packageManager` |
-| Rust / Cargo | **Not installed** | Install `stable-x86_64-pc-windows-msvc` via rustup |
-| Visual Studio | 2026 Community 18.11.2 installed, **no VC++ tools / Windows SDK** | Add "Desktop development with C++" workload + Windows 11 SDK |
-| WebView2 | Runtime 156.0.4314.50 installed | No action |
-| Git | 2.56.0.windows.3 | Configure LF-safe workflow |
+| Item              | Finding                                                           | Action                                                            |
+| ----------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Branch            | `main`, single initial commit                                     | Work incrementally on `main` with one commit per completed step   |
+| Existing files    | `LICENSE` (GPL-3.0), `.gitignore`, `.gitattributes`, `paln.md`    | Preserve; extend `.gitignore` only where required                 |
+| `AGENTS.md`       | **Not present** (root and recursive search)                       | No extra repository instructions exist; this plan governs Phase 0 |
+| Architecture docs | None found; `paln.md` states "Tauri 2 + React + TypeScript"       | Use the stack below as the approved baseline                      |
+| Node.js           | v24.22.1                                                          | Use for tooling                                                   |
+| npm               | 12.2.1                                                            | Bootstrap only; project uses pnpm                                 |
+| corepack          | 0.36.0, pnpm 12.16.1 resolvable                                   | Pin package manager with `packageManager`                         |
+| Rust / Cargo      | **Not installed**                                                 | Install `stable-x86_64-pc-windows-msvc` via rustup                |
+| Visual Studio     | 2026 Community 18.11.2 installed, **no VC++ tools / Windows SDK** | Add "Desktop development with C++" workload + Windows 11 SDK      |
+| WebView2          | Runtime 156.0.4314.50 installed                                   | No action                                                         |
+| Git               | 2.56.0.windows.3                                                  | Configure LF-safe workflow                                        |
 
 ## 2. Approved stack (Phase 0)
 
