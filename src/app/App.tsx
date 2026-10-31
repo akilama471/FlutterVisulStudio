@@ -5,6 +5,7 @@ import { StatusBar } from "../features/editor/StatusBar";
 import { WorkbenchHeader } from "../features/editor/WorkbenchHeader";
 import { InspectorPanel } from "../features/inspector/InspectorPanel";
 import { ProjectExplorer } from "../features/project/ProjectExplorer";
+import { useProjectWorkspace } from "../features/project/useProjectWorkspace";
 import { FALLBACK_APP_INFO, getAppInfo, type AppInfo } from "../shared/lib/appInfo";
 
 type PanelVisibility = {
@@ -15,6 +16,7 @@ type PanelVisibility = {
 export function App() {
   const [panels, setPanels] = useState<PanelVisibility>({ explorer: true, inspector: true });
   const [appInfo, setAppInfo] = useState<AppInfo>(FALLBACK_APP_INFO);
+  const { project, status, error, openProjectFromPicker } = useProjectWorkspace();
 
   useEffect(() => {
     let active = true;
@@ -36,7 +38,7 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <WorkbenchHeader />
+      <WorkbenchHeader project={project} />
       <div className="workbench">
         <ActivityBar
           explorerOpen={panels.explorer}
@@ -44,11 +46,18 @@ export function App() {
           onToggleExplorer={() => togglePanel("explorer")}
           onToggleInspector={() => togglePanel("inspector")}
         />
-        {panels.explorer ? <ProjectExplorer /> : null}
-        <EditorArea />
+        {panels.explorer ? (
+          <ProjectExplorer
+            project={project}
+            status={status}
+            error={error}
+            onOpenProject={openProjectFromPicker}
+          />
+        ) : null}
+        <EditorArea project={project} status={status} onOpenProject={openProjectFromPicker} />
         {panels.inspector ? <InspectorPanel /> : null}
       </div>
-      <StatusBar appInfo={appInfo} />
+      <StatusBar appInfo={appInfo} project={project} status={status} />
     </div>
   );
 }

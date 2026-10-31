@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Icon, type IconName } from "./Icon";
 
 type EmptyStateProps = {
@@ -5,9 +6,10 @@ type EmptyStateProps = {
   title: string;
   description: string;
   className?: string;
+  action?: ReactNode;
 };
 
-export function EmptyState({ icon, title, description, className }: EmptyStateProps) {
+export function EmptyState({ icon, title, description, className, action }: EmptyStateProps) {
   return (
     <div className={className ? `empty-state ${className}` : "empty-state"}>
       <span className="empty-state__icon">
@@ -15,6 +17,7 @@ export function EmptyState({ icon, title, description, className }: EmptyStatePr
       </span>
       <p className="empty-state__title">{title}</p>
       <p className="empty-state__description">{description}</p>
+      {action ? <div className="empty-state__action">{action}</div> : null}
     </div>
   );
 }

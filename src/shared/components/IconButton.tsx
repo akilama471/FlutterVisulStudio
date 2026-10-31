@@ -4,11 +4,19 @@ type IconButtonProps = {
   label: string;
   icon: IconName;
   active?: boolean;
+  disabled?: boolean;
   className?: string;
   onClick?: () => void;
 };
 
-export function IconButton({ label, icon, active = false, className, onClick }: IconButtonProps) {
+export function IconButton({
+  label,
+  icon,
+  active = false,
+  disabled = false,
+  className,
+  onClick,
+}: IconButtonProps) {
   return (
     <button
       type="button"
@@ -16,6 +24,7 @@ export function IconButton({ label, icon, active = false, className, onClick }: 
       aria-label={label}
       aria-pressed={active}
       title={label}
+      disabled={disabled}
       onClick={onClick}
     >
       <Icon name={icon} size={18} />

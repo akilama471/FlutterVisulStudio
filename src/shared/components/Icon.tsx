@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 
-export type IconName = "code" | "file" | "folder" | "grid" | "layers" | "sliders" | "sparkles";
+export type IconName =
+  "chevron" | "code" | "file" | "folder" | "grid" | "layers" | "sliders" | "sparkles";
 
 const paths: Record<IconName, ReactNode> = {
+  chevron: <path d="m9 18 6-6-6-6" />,
   code: (
     <>
       <path d="m8 6-5 6 5 6" />
