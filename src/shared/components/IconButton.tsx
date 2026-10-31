@@ -12,7 +12,7 @@ type IconButtonProps = {
 export function IconButton({
   label,
   icon,
-  active = false,
+  active,
   disabled = false,
   className,
   onClick,
