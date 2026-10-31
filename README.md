@@ -1,9 +1,10 @@
 # Flutter UI Studio
 
 A visual desktop studio for building Flutter user interfaces. This repository is currently at
-**Phase 1 — Project Workspace & File Explorer**: it provides the Tauri 2 + React + TypeScript
-application shell, a native Flutter project picker, and a read-only project file tree. The widget
-engine, canvas, code editor, and Dart generation are deliberately not implemented yet.
+**Phase 2 — Widget Model & Visual Canvas**: it builds on the Phase 1 project workspace with a typed
+widget tree, a Flutter-style preview canvas, a click-to-add palette, and a property inspector. The
+design lives in memory only; Dart generation, file writing, drag and drop, and undo/redo are not
+implemented yet.
 
 ## Stack
 
@@ -34,7 +35,9 @@ pnpm tauri dev
 The first Rust build downloads and compiles the Tauri dependency graph, so it can take several
 minutes.
 
-## Using the project workspace
+## Using the studio
+
+### Project workspace
 
 1. Select **Open project folder** in the explorer header, or **Open Flutter project** in the empty
    state.
@@ -42,7 +45,28 @@ minutes.
 3. Browse the project tree; folders load lazily when expanded.
 4. The last successfully opened project is remembered and restored on the next launch.
 
-The tree ignores `.git`, `.dart_tool`, and `build`. File contents are not opened in Phase 1.
+The tree ignores `.git`, `.dart_tool`, and `build`. File contents are not opened yet.
+
+### Visual canvas
+
+Opening a project replaces the welcome surface with the visual canvas.
+
+1. Pick a widget from the toolbar palette: **Text**, **Button**, **Container**, **Row**, or
+   **Column**.
+2. The widget is appended to the selected container. If a leaf widget is selected, the new widget
+   goes into its parent; with nothing selected, it goes into the Screen. The toolbar shows the
+   current target.
+3. Click any widget on the canvas to select it. The inspector shows its hierarchy, type, and ID.
+4. Edit properties in the inspector and the canvas updates immediately:
+   - **Text** content and **Button** label.
+   - **Row** and **Column** gap.
+   - **Container** padding and background.
+   - **Screen** background.
+5. Use **Delete widget** to remove the selected widget and its subtree. The Screen cannot be
+   deleted.
+
+The design is an in-memory scratchpad. Switching projects or restarting the application resets it
+to the starter document: a Screen containing a Column with a heading Text and a Button.
 
 ## Scripts
 
@@ -69,10 +93,11 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 ```text
 src/
-  app/                  Application composition and shell state
+  app/                  Application composition, design surface, shell state
   features/
-    editor/             Header, activity bar, editor area, status bar
-    inspector/          Properties panel placeholder
+    canvas/             Widget model, reducer, canvas, palette, inspector content
+    editor/             Header, activity bar, editor shell, status bar
+    inspector/          Inspector panel shell
     project/            Project picker, workspace hook, storage, lazy file tree
   shared/
     components/         Reusable presentational components
@@ -89,21 +114,23 @@ docs/                   Engineering plans and reports
 
 Features may depend on `shared`, never the reverse. Cross-feature composition lives in `app/`.
 
-## Phase 1 scope
+## Phase 2 scope
 
 Included:
 
-- Native folder picker for choosing a Flutter project.
-- `pubspec.yaml` validation and project-name extraction in Rust.
-- Safe, project-relative directory listing with lazy explorer folders.
-- Last-project persistence and startup restoration.
-- Project context in the header, editor welcome surface, and status bar.
+- Typed widget tree with a root Screen and Column, Row, Container, Text, and Button widgets.
+- Pure, immutable model helpers and a reducer for add, select, delete, and property updates.
+- Flutter-style light preview inside a dark device frame.
+- Click-to-add palette that inserts into the selected container or its parent.
+- Canvas selection with breadcrumb hierarchy and an editable property inspector.
+- Per-project design reset when the active project changes.
 
 Not included (future phases):
 
+- Drag and drop, reordering, multi-select, copy/paste, undo/redo.
+- Design persistence, project file writing, and Dart generation.
+- Responsive breakpoints, constraints, alignment, theming, assets, and full Flutter coverage.
 - Opening or editing file contents, file watching, multi-root workspaces.
-- Canvas rendering, widget engine, Dart generation, settings UI, command palette, custom title bar,
-  and plugin support.
 
 ## License
 
