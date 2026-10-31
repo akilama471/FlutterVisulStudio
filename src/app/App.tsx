@@ -61,7 +61,10 @@ export function App() {
           <DesignSurface key={project.path} project={project} showInspector={panels.inspector} />
         ) : (
           <>
-            <EditorArea tabLabel="Welcome" tabIcon="file">
+            <EditorArea
+              tabs={[{ id: "welcome", label: "Welcome", icon: "file" }]}
+              activeTabId="welcome"
+            >
               <EditorWelcome status={status} onOpenProject={openProjectFromPicker} />
             </EditorArea>
             {panels.inspector ? (

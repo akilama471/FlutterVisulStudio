@@ -539,13 +539,26 @@ ul {
   align-items: center;
   gap: 8px;
   padding: 0 16px;
+  border: 0;
   border-right: 1px solid var(--color-border);
+  background: transparent;
   color: var(--color-text-secondary);
   font-size: 12px;
+  text-align: left;
+  cursor: pointer;
   user-select: none;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
-.editor-tab--active {
+.editor-tab:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text);
+}
+
+.editor-tab--active,
+.editor-tab--active:hover {
   background: var(--color-bg-editor);
   color: var(--color-text);
 }
@@ -566,6 +579,14 @@ ul {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.editor-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
 }
 
 /* Welcome surface */
@@ -990,6 +1011,81 @@ ul {
   font-style: italic;
 }
 
+/* Dart preview */
+
+.dart-preview {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 0%, rgba(76, 141, 255, 0.06), transparent 70%),
+    var(--color-bg-editor);
+}
+
+.dart-preview__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dart-preview__title {
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.dart-preview__subtitle {
+  max-width: 620px;
+  margin-top: 3px;
+  color: var(--color-text-muted);
+  font-size: 11.5px;
+}
+
+.dart-preview__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.dart-preview__status {
+  min-width: 0;
+  color: var(--color-success);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.dart-preview__status--error {
+  color: #f0a4a4;
+}
+
+.dart-preview__body {
+  flex: 1;
+  min-height: 0;
+  padding: 18px;
+  overflow: auto;
+}
+
+.dart-code {
+  width: fit-content;
+  min-width: 100%;
+  margin: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: #090b10;
+  color: #c8d3e4;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.65;
+  tab-size: 2;
+  white-space: pre;
+}
+
 /* Canvas inspector */
 
 .inspector-content {
@@ -1237,6 +1333,16 @@ ul {
 
   .canvas-device {
     width: 320px;
+  }
+
+  .dart-preview__header {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .dart-preview__actions {
+    align-self: stretch;
+    justify-content: space-between;
   }
 }
 
