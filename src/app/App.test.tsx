@@ -67,6 +67,8 @@ describe("App", () => {
     expect(
       within(screen.getByRole("complementary", { name: "Inspector" })).getByText("No project open"),
     ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Welcome" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("tab", { name: "Dart" })).not.toBeInTheDocument();
 
     expect(await screen.findByText("Tauri unavailable")).toBeInTheDocument();
   });
@@ -139,6 +141,8 @@ describe("App", () => {
 
     expect(await screen.findByRole("region", { name: "Visual canvas" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1, name: "Canvas" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Canvas" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Dart" })).toBeInTheDocument();
     expect(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "lib" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "pubspec.yaml" })).toBeInTheDocument();

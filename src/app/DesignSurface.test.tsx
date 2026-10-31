@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DesignSurface } from "./DesignSurface";
 
 const PROJECT = {
@@ -14,6 +14,86 @@ function renderSurface() {
 }
 
 describe("DesignSurface", () => {
+  it("shows Canvas and Dart tabs with the canvas active by default", () => {
+    renderSurface();
+
+    expect(screen.getByRole("tab", { name: "Canvas" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Dart" })).toHaveAttribute("aria-selected", "false");
+    expect(
+      screen.queryByRole("heading", { level: 1, name: "Dart preview" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders generated Dart for the current canvas", async () => {
+    const user = userEvent.setup();
+    renderSurface();
+
+    await user.click(screen.getByRole("tab", { name: "Dart" }));
+
+    expect(screen.getByRole("tab", { name: "Dart" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { level: 1, name: "Dart preview" })).toBeInTheDocument();
+
+    const code = screen.getByLabelText("Generated Dart code");
+    expect(code).toHaveTextContent("import 'package:flutter/material.dart';");
+    expect(code).toHaveTextContent("'Hello, Flutter!'");
+    expect(code).toHaveTextContent("child: const Text('Get started'),");
+  });
+
+  it("regenerates Dart after the canvas is edited", async () => {
+    const user = userEvent.setup();
+    renderSurface();
+
+    await user.click(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' }));
+    const content = screen.getByLabelText("Content");
+    await user.clear(content);
+    await user.type(content, "Studio");
+
+    await user.click(screen.getByRole("tab", { name: "Dart" }));
+
+    expect(screen.getByLabelText("Generated Dart code")).toHaveTextContent("'Studio',");
+    expect(screen.getByLabelText("Generated Dart code")).not.toHaveTextContent("'Hello, Flutter!'");
+  });
+
+  it("keeps the canvas state when switching back from Dart", async () => {
+    const user = userEvent.setup();
+    renderSurface();
+
+    await user.click(screen.getByRole("tab", { name: "Dart" }));
+    await user.click(screen.getByRole("tab", { name: "Canvas" }));
+
+    expect(screen.getByRole("region", { name: "Visual canvas" })).toBeInTheDocument();
+    expect(screen.getByRole("treeitem", { name: "Screen" })).toBeInTheDocument();
+    expect(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' })).toBeInTheDocument();
+  });
+
+  it("copies the generated Dart to the clipboard", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.spyOn(navigator.clipboard, "writeText");
+    renderSurface();
+
+    await user.click(screen.getByRole("tab", { name: "Dart" }));
+    await user.click(screen.getByRole("button", { name: "Copy code" }));
+
+    expect(await screen.findByText("Copied to clipboard")).toBeInTheDocument();
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringContaining("import 'package:flutter/material.dart';"),
+    );
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("'Hello, Flutter!'"));
+  });
+
+  it("reports a clipboard failure", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(new Error("Clipboard denied"));
+    renderSurface();
+
+    await user.click(screen.getByRole("tab", { name: "Dart" }));
+    await user.click(screen.getByRole("button", { name: "Copy code" }));
+
+    expect(await screen.findByText("Copy failed")).toBeInTheDocument();
+    expect(screen.queryByText("Copied to clipboard")).not.toBeInTheDocument();
+  });
+
   it("renders the starter document and the nothing-selected inspector state", () => {
     renderSurface();
 
