@@ -1,24 +1,22 @@
-import type { ProjectInfo } from "../../shared/lib/project";
-import type { ProjectStatus } from "../project/useProjectWorkspace";
-import { Icon } from "../../shared/components/Icon";
-import { EditorWelcome } from "./EditorWelcome";
+import type { ReactNode } from "react";
+import { Icon, type IconName } from "../../shared/components/Icon";
 
 type EditorAreaProps = {
-  project: ProjectInfo | null;
-  status: ProjectStatus;
-  onOpenProject: () => void;
+  tabLabel: string;
+  tabIcon?: IconName;
+  children: ReactNode;
 };
 
-export function EditorArea({ project, status, onOpenProject }: EditorAreaProps) {
+export function EditorArea({ tabLabel, tabIcon = "file", children }: EditorAreaProps) {
   return (
     <main className="workspace" aria-label="Editor">
       <div className="tab-bar">
         <div className="editor-tab editor-tab--active" aria-current="page">
-          <Icon name={project ? "folder" : "file"} size={13} />
-          <span>{project?.name ?? "Welcome"}</span>
+          <Icon name={tabIcon} size={13} />
+          <span>{tabLabel}</span>
         </div>
       </div>
-      <EditorWelcome project={project} status={status} onOpenProject={onOpenProject} />
+      {children}
     </main>
   );
 }

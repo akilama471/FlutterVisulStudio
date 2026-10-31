@@ -63,7 +63,10 @@ describe("App", () => {
       screen.getByRole("heading", { level: 1, name: "Flutter UI Studio" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("contentinfo", { name: "Status bar" })).toBeInTheDocument();
-    expect(screen.getByText("Phase 1")).toBeInTheDocument();
+    expect(screen.getByText("Phase 2")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("complementary", { name: "Inspector" })).getByText("No project open"),
+    ).toBeInTheDocument();
 
     expect(await screen.findByText("Tauri unavailable")).toBeInTheDocument();
   });
@@ -134,9 +137,9 @@ describe("App", () => {
     const explorer = screen.getByRole("complementary", { name: "Explorer" });
     await user.click(within(explorer).getByRole("button", { name: "Open Flutter project" }));
 
-    expect(
-      await screen.findByRole("heading", { level: 1, name: PROJECT.name }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Visual canvas" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Canvas" })).toBeInTheDocument();
+    expect(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "lib" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "pubspec.yaml" })).toBeInTheDocument();
     expect(
@@ -207,9 +210,8 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(
-      await screen.findByRole("heading", { level: 1, name: PROJECT.name }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Visual canvas" })).toBeInTheDocument();
+    expect(screen.getByRole("treeitem", { name: 'Button "Get started"' })).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledWith("open_project", { path: PROJECT.path });
     expect(window.localStorage.getItem(RECENT_PROJECT_KEY)).toBe(PROJECT.path);
   });

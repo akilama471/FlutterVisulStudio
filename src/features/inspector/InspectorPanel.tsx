@@ -1,18 +1,16 @@
-import { EmptyState } from "../../shared/components/EmptyState";
+import type { ReactNode } from "react";
 
-export function InspectorPanel() {
+type InspectorPanelProps = {
+  children: ReactNode;
+};
+
+export function InspectorPanel({ children }: InspectorPanelProps) {
   return (
     <aside className="side-panel side-panel--inspector" aria-label="Inspector">
       <div className="side-panel__header">
         <h2 className="side-panel__title">Inspector</h2>
       </div>
-      <div className="side-panel__body">
-        <EmptyState
-          icon="sliders"
-          title="Nothing selected"
-          description="Widget properties will appear here once the visual canvas is available."
-        />
-      </div>
+      <div className="side-panel__body">{children}</div>
     </aside>
   );
 }

@@ -25,6 +25,12 @@
   --color-accent-strong: #7aabff;
   --color-success: #3fbf7f;
 
+  --color-canvas-bg: #f6f8fc;
+  --color-canvas-text: #1b2330;
+  --color-canvas-muted: #5c6776;
+  --color-canvas-border: #d7dee9;
+  --color-canvas-accent: #2563eb;
+
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 10px;

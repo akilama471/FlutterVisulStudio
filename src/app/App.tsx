@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { ActivityBar } from "../features/editor/ActivityBar";
 import { EditorArea } from "../features/editor/EditorArea";
+import { EditorWelcome } from "../features/editor/EditorWelcome";
 import { StatusBar } from "../features/editor/StatusBar";
 import { WorkbenchHeader } from "../features/editor/WorkbenchHeader";
 import { InspectorPanel } from "../features/inspector/InspectorPanel";
+import { NoProjectInspector } from "../features/canvas/CanvasInspector";
 import { ProjectExplorer } from "../features/project/ProjectExplorer";
 import { useProjectWorkspace } from "../features/project/useProjectWorkspace";
 import { FALLBACK_APP_INFO, getAppInfo, type AppInfo } from "../shared/lib/appInfo";
+import { DesignSurface } from "./DesignSurface";
 
 type PanelVisibility = {
   explorer: boolean;
@@ -54,8 +57,20 @@ export function App() {
             onOpenProject={openProjectFromPicker}
           />
         ) : null}
-        <EditorArea project={project} status={status} onOpenProject={openProjectFromPicker} />
-        {panels.inspector ? <InspectorPanel /> : null}
+        {project ? (
+          <DesignSurface key={project.path} project={project} showInspector={panels.inspector} />
+        ) : (
+          <>
+            <EditorArea tabLabel="Welcome" tabIcon="file">
+              <EditorWelcome status={status} onOpenProject={openProjectFromPicker} />
+            </EditorArea>
+            {panels.inspector ? (
+              <InspectorPanel>
+                <NoProjectInspector />
+              </InspectorPanel>
+            ) : null}
+          </>
+        )}
       </div>
       <StatusBar appInfo={appInfo} project={project} status={status} />
     </div>

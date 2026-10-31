@@ -1,14 +1,39 @@
 import type { ReactNode } from "react";
 
 export type IconName =
-  "chevron" | "code" | "file" | "folder" | "grid" | "layers" | "sliders" | "sparkles";
+  | "button"
+  | "chevron"
+  | "code"
+  | "column"
+  | "file"
+  | "folder"
+  | "grid"
+  | "layers"
+  | "row"
+  | "sliders"
+  | "sparkles"
+  | "square"
+  | "text"
+  | "trash";
 
 const paths: Record<IconName, ReactNode> = {
+  button: (
+    <>
+      <rect x="3" y="7" width="18" height="10" rx="5" />
+      <path d="M8 12h8" />
+    </>
+  ),
   chevron: <path d="m9 18 6-6-6-6" />,
   code: (
     <>
       <path d="m8 6-5 6 5 6" />
       <path d="m16 6 5 6-5 6" />
+    </>
+  ),
+  column: (
+    <>
+      <rect x="8" y="3" width="8" height="8" rx="1.5" />
+      <rect x="8" y="13" width="8" height="8" rx="1.5" />
     </>
   ),
   file: (
@@ -33,6 +58,12 @@ const paths: Record<IconName, ReactNode> = {
       <path d="m3 17 9 5 9-5" />
     </>
   ),
+  row: (
+    <>
+      <rect x="3" y="8" width="8" height="8" rx="1.5" />
+      <rect x="13" y="8" width="8" height="8" rx="1.5" />
+    </>
+  ),
   sliders: (
     <>
       <path d="M4 6h9" />
@@ -50,6 +81,23 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <path d="m12 3 1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z" />
       <path d="m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9z" />
+    </>
+  ),
+  square: <rect x="4" y="4" width="16" height="16" rx="3" />,
+  text: (
+    <>
+      <path d="M5 6h14" />
+      <path d="M12 6v12" />
+      <path d="M9 18h6" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M4 7h16" />
+      <path d="M9 7V5h6v2" />
+      <path d="m6 7 1 13h10l1-13" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
     </>
   ),
 };
