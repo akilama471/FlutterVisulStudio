@@ -13,7 +13,7 @@ deliberately not implemented yet.
 | Frontend | React 19, TypeScript 5.9 (strict), Vite 8 |
 | Styling  | Plain CSS with design tokens              |
 | Backend  | Rust 2021 edition, MSVC toolchain         |
-| Tooling  | pnpm, ESLint 9 flat config, Prettier      |
+| Tooling  | pnpm, ESLint 10 flat config, Prettier     |
 | Tests    | Vitest, Testing Library, `cargo test`     |
 
 ## Prerequisites
