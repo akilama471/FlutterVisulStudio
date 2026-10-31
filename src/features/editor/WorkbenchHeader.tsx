@@ -12,7 +12,7 @@ export function WorkbenchHeader({ project }: WorkbenchHeaderProps) {
       <div className="workbench-header__brand">
         <BrandMark size={26} />
         <span className="workbench-header__title">Flutter UI Studio</span>
-        <span className="workbench-header__badge">Phase 2</span>
+        <span className="workbench-header__badge">Phase 3</span>
       </div>
       <span className="workbench-header__divider" aria-hidden="true" />
       <div className="workbench-header__context" title={project?.path}>

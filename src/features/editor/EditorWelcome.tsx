@@ -43,8 +43,8 @@ export function EditorWelcome({ status, onOpenProject }: EditorWelcomeProps) {
           </Button>
         </div>
         <p className="welcome__note">
-          Phase 1 added project opening and file browsing. Open a project to start composing on the
-          in-memory visual canvas.
+          Phase 3 adds a read-only Dart preview generated from the canvas. Open a project to start
+          composing or review the generated code.
         </p>
       </div>
     </section>
