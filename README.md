@@ -1,10 +1,10 @@
 # Flutter UI Studio
 
 A visual desktop studio for building Flutter user interfaces. This repository is currently at
-**Phase 2 — Widget Model & Visual Canvas**: it builds on the Phase 1 project workspace with a typed
-widget tree, a Flutter-style preview canvas, a click-to-add palette, and a property inspector. The
-design lives in memory only; Dart generation, file writing, drag and drop, and undo/redo are not
-implemented yet.
+**Phase 3 — Dart Generation & Code Preview**: it builds on the Phase 2 visual canvas by generating
+readable Dart from the current widget tree and showing it in a read-only preview tab. The design
+still lives in memory only; generated code is never written to the project, and file writing,
+drag and drop, and undo/redo are not implemented yet.
 
 ## Stack
 
@@ -68,6 +68,20 @@ Opening a project replaces the welcome surface with the visual canvas.
 The design is an in-memory scratchpad. Switching projects or restarting the application resets it
 to the starter document: a Screen containing a Column with a heading Text and a Button.
 
+### Dart preview
+
+The editor has **Canvas** and **Dart** tabs while a project is open.
+
+1. Select the **Dart** tab to see readable Dart generated from the current widget tree.
+2. The preview is read-only and always regenerated from the latest canvas state. Edit a property on
+   the Canvas tab, then return to Dart to see the change.
+3. Use **Copy code** to put the generated source on the clipboard. The header reports
+   `Copied to clipboard` or `Copy failed`.
+4. Switching back to **Canvas** preserves the design and inspector selection.
+
+Generated code is a self-contained `lib/main.dart`-style file with a Material app shell and a
+`StudioScreen` scaffold. It is displayed only; nothing is written to the Flutter project on disk.
+
 ## Scripts
 
 | Command             | Purpose                                      |
@@ -96,7 +110,8 @@ src/
   app/                  Application composition, design surface, shell state
   features/
     canvas/             Widget model, reducer, canvas, palette, inspector content
-    editor/             Header, activity bar, editor shell, status bar
+    dart/               Dart generator and read-only code preview
+    editor/             Header, activity bar, editor tabs, status bar
     inspector/          Inspector panel shell
     project/            Project picker, workspace hook, storage, lazy file tree
   shared/
@@ -114,23 +129,27 @@ docs/                   Engineering plans and reports
 
 Features may depend on `shared`, never the reverse. Cross-feature composition lives in `app/`.
 
-## Phase 2 scope
+## Phase 3 scope
 
 Included:
 
-- Typed widget tree with a root Screen and Column, Row, Container, Text, and Button widgets.
-- Pure, immutable model helpers and a reducer for add, select, delete, and property updates.
-- Flutter-style light preview inside a dark device frame.
-- Click-to-add palette that inserts into the selected container or its parent.
-- Canvas selection with breadcrumb hierarchy and an editable property inspector.
-- Per-project design reset when the active project changes.
+- Pure Dart generator for the six Phase 2 widget kinds.
+- Self-contained Material app shell with `StudioApp` and a `StudioScreen` scaffold.
+- Two-space indentation, escaped string literals, colour parsing, and layout spacers.
+- Canvas and Dart editor tabs; Canvas remains the default.
+- Read-only monospaced Dart preview regenerated from the latest canvas state.
+- Copy-to-clipboard action with success and failure feedback.
+- Generator unit tests and UI tests for tab switching, regeneration, and clipboard states.
 
 Not included (future phases):
 
+- Writing or overwriting files in the Flutter project.
+- Editing, analysing, or formatting generated code with the Flutter toolchain.
+- Design persistence between launches or across projects.
 - Drag and drop, reordering, multi-select, copy/paste, undo/redo.
-- Design persistence, project file writing, and Dart generation.
-- Responsive breakpoints, constraints, alignment, theming, assets, and full Flutter coverage.
-- Opening or editing file contents, file watching, multi-root workspaces.
+- Responsive breakpoints, constraints, alignment, theming, assets, animations, gestures, and full
+  Flutter widget coverage.
+- Opening or editing project file contents, file watching, multi-root workspaces.
 
 ## License
 
