@@ -45,16 +45,16 @@ pub struct ProjectEntry {
 
 #[tauri::command]
 pub fn open_project(state: State<'_, ProjectState>, path: String) -> Result<ProjectInfo, String> {
-    let root = PathBuf::from(path);
-    let info = inspect_project(&root)?;
+    let requested_root = PathBuf::from(path);
+    let inspected = inspect_project(&requested_root)?;
 
     let mut active_root = state
         .root
         .lock()
         .map_err(|_| "The project state is unavailable.".to_owned())?;
-    *active_root = Some(PathBuf::from(&info.path));
+    *active_root = Some(inspected.root);
 
-    Ok(info)
+    Ok(inspected.info)
 }
 
 #[tauri::command]
@@ -84,7 +84,13 @@ pub fn close_project(state: State<'_, ProjectState>) -> Result<(), String> {
     Ok(())
 }
 
-fn inspect_project(path: &Path) -> Result<ProjectInfo, String> {
+#[derive(Debug)]
+struct InspectedProject {
+    info: ProjectInfo,
+    root: PathBuf,
+}
+
+fn inspect_project(path: &Path) -> Result<InspectedProject, String> {
     let root = path.canonicalize().map_err(|_| OPEN_ERROR.to_owned())?;
 
     if !root.is_dir() {
@@ -115,11 +121,26 @@ fn inspect_project(path: &Path) -> Result<ProjectInfo, String> {
         None
     };
 
-    Ok(ProjectInfo {
-        name,
-        path: root.to_string_lossy().into_owned(),
-        entry_point,
+    Ok(InspectedProject {
+        info: ProjectInfo {
+            name,
+            path: display_path(&root),
+            entry_point,
+        },
+        root,
     })
+}
+
+fn display_path(path: &Path) -> String {
+    let path = path.to_string_lossy();
+
+    if let Some(rest) = path.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
+    } else if let Some(rest) = path.strip_prefix(r"\\?\") {
+        rest.to_owned()
+    } else {
+        path.into_owned()
+    }
 }
 
 fn parse_project_name(contents: &str) -> Option<String> {
@@ -357,13 +378,25 @@ mod tests {
     #[test]
     fn inspects_a_valid_flutter_project() {
         let project = flutter_project("valid");
-        let info = inspect_project(&project.path).expect("project should be valid");
+        let inspected = inspect_project(&project.path).expect("project should be valid");
+        let canonical = project.path.canonicalize().expect("fixture should exist");
 
-        assert_eq!(info.name, "sample_app");
-        assert_eq!(info.entry_point.as_deref(), Some("lib/main.dart"));
+        assert_eq!(inspected.info.name, "sample_app");
+        assert_eq!(inspected.info.entry_point.as_deref(), Some("lib/main.dart"));
+        assert_eq!(inspected.root, canonical);
+        assert_eq!(inspected.info.path, display_path(&canonical));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn strips_verbatim_prefixes_from_display_paths() {
         assert_eq!(
-            PathBuf::from(&info.path),
-            project.path.canonicalize().expect("fixture should exist")
+            display_path(Path::new(r"\\?\C:\Projects\demo_app")),
+            r"C:\Projects\demo_app"
+        );
+        assert_eq!(
+            display_path(Path::new(r"\\?\UNC\server\share\demo_app")),
+            r"\\server\share\demo_app"
         );
     }
 
