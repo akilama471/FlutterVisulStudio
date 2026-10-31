@@ -1,0 +1,79 @@
+import type { ReactNode } from "react";
+
+export type IconName = "code" | "file" | "folder" | "grid" | "layers" | "sliders" | "sparkles";
+
+const paths: Record<IconName, ReactNode> = {
+  code: (
+    <>
+      <path d="m8 6-5 6 5 6" />
+      <path d="m16 6 5 6-5 6" />
+    </>
+  ),
+  file: (
+    <>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+    </>
+  ),
+  folder: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
+  grid: (
+    <>
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </>
+  ),
+  layers: (
+    <>
+      <path d="m12 2 9 5-9 5-9-5z" />
+      <path d="m3 12 9 5 9-5" />
+      <path d="m3 17 9 5 9-5" />
+    </>
+  ),
+  sliders: (
+    <>
+      <path d="M4 6h9" />
+      <path d="M17 6h3" />
+      <circle cx="15" cy="6" r="2" />
+      <path d="M4 12h3" />
+      <path d="M11 12h9" />
+      <circle cx="9" cy="12" r="2" />
+      <path d="M4 18h9" />
+      <path d="M17 18h3" />
+      <circle cx="15" cy="18" r="2" />
+    </>
+  ),
+  sparkles: (
+    <>
+      <path d="m12 3 1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z" />
+      <path d="m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9z" />
+    </>
+  ),
+};
+
+type IconProps = {
+  name: IconName;
+  size?: number;
+  className?: string;
+};
+
+export function Icon({ name, size = 16, className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {paths[name]}
+    </svg>
+  );
+}
