@@ -13,6 +13,11 @@ const NOT_FLUTTER_ERROR: &str =
 const OPEN_ERROR: &str = "The project folder could not be opened.";
 const UNAVAILABLE_ERROR: &str = "That folder is no longer available.";
 const OUTSIDE_PROJECT_ERROR: &str = "That location is outside the open project.";
+const READ_ERROR: &str = "The file could not be read.";
+const WRITE_ERROR: &str = "The file could not be written.";
+const INVALID_FILE_PATH: &str = "Only Dart files inside the project's lib folder can be used.";
+const FILE_TOO_LARGE: &str = "The file is too large to read or write.";
+const MAX_FILE_BYTES: usize = 1024 * 1024;
 
 #[derive(Default)]
 pub struct ProjectState {
@@ -43,6 +48,14 @@ pub struct ProjectEntry {
     pub has_children: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectWriteResult {
+    pub relative_path: String,
+    pub backup_path: Option<String>,
+    pub bytes: usize,
+}
+
 #[tauri::command]
 pub fn open_project(state: State<'_, ProjectState>, path: String) -> Result<ProjectInfo, String> {
     let requested_root = PathBuf::from(path);
@@ -71,6 +84,39 @@ pub fn list_project_directory(
         .ok_or_else(|| NO_PROJECT_ERROR.to_owned())?;
 
     list_directory(root, &relative_path)
+}
+
+#[tauri::command]
+pub fn read_project_file(
+    state: State<'_, ProjectState>,
+    relative_path: String,
+) -> Result<Option<String>, String> {
+    let active_root = state
+        .root
+        .lock()
+        .map_err(|_| "The project state is unavailable.".to_owned())?;
+    let root = active_root
+        .as_deref()
+        .ok_or_else(|| NO_PROJECT_ERROR.to_owned())?;
+
+    read_project_file_from(root, &relative_path)
+}
+
+#[tauri::command]
+pub fn write_project_file(
+    state: State<'_, ProjectState>,
+    relative_path: String,
+    contents: String,
+) -> Result<ProjectWriteResult, String> {
+    let active_root = state
+        .root
+        .lock()
+        .map_err(|_| "The project state is unavailable.".to_owned())?;
+    let root = active_root
+        .as_deref()
+        .ok_or_else(|| NO_PROJECT_ERROR.to_owned())?;
+
+    write_project_file_to(root, &relative_path, &contents)
 }
 
 #[tauri::command]
@@ -261,6 +307,150 @@ fn resolve_directory(root: &Path, relative_path: &str) -> Result<PathBuf, String
     }
 
     Ok(directory)
+}
+
+struct ProjectFileTarget {
+    relative_path: String,
+    path: PathBuf,
+    exists: bool,
+}
+
+fn read_project_file_from(root: &Path, relative_path: &str) -> Result<Option<String>, String> {
+    let target = resolve_file_target(root, relative_path)?;
+
+    if !target.exists {
+        return Ok(None);
+    }
+
+    let metadata = fs::metadata(&target.path).map_err(|error| {
+        eprintln!("failed to inspect project file: {error}");
+        UNAVAILABLE_ERROR.to_owned()
+    })?;
+
+    if metadata.len() > MAX_FILE_BYTES as u64 {
+        return Err(FILE_TOO_LARGE.to_owned());
+    }
+
+    let contents = fs::read_to_string(&target.path).map_err(|error| {
+        eprintln!("failed to read project file: {error}");
+        READ_ERROR.to_owned()
+    })?;
+
+    if contents.len() > MAX_FILE_BYTES {
+        return Err(FILE_TOO_LARGE.to_owned());
+    }
+
+    Ok(Some(contents))
+}
+
+fn write_project_file_to(
+    root: &Path,
+    relative_path: &str,
+    contents: &str,
+) -> Result<ProjectWriteResult, String> {
+    if contents.len() > MAX_FILE_BYTES {
+        return Err(FILE_TOO_LARGE.to_owned());
+    }
+
+    let target = resolve_file_target(root, relative_path)?;
+    let backup_path = if target.exists {
+        let backup = next_backup_path(&target.path)?;
+        fs::copy(&target.path, &backup).map_err(|error| {
+            eprintln!("failed to back up project file: {error}");
+            WRITE_ERROR.to_owned()
+        })?;
+        Some(relative_path_string(&backup, root))
+    } else {
+        None
+    };
+
+    fs::write(&target.path, contents.as_bytes()).map_err(|error| {
+        eprintln!("failed to write project file: {error}");
+        WRITE_ERROR.to_owned()
+    })?;
+
+    Ok(ProjectWriteResult {
+        relative_path: target.relative_path,
+        backup_path,
+        bytes: contents.len(),
+    })
+}
+
+fn resolve_file_target(root: &Path, relative_path: &str) -> Result<ProjectFileTarget, String> {
+    let relative = Path::new(relative_path);
+
+    if relative.as_os_str().is_empty() || relative.is_absolute() {
+        return Err(INVALID_FILE_PATH.to_owned());
+    }
+
+    let mut components = Vec::new();
+    for component in relative.components() {
+        match component {
+            Component::Normal(value) => components.push(value.to_string_lossy().into_owned()),
+            _ => return Err(INVALID_FILE_PATH.to_owned()),
+        }
+    }
+
+    let file_name = components.last().cloned().unwrap_or_default();
+    if components.len() < 2
+        || components[0] != "lib"
+        || !file_name.ends_with(".dart")
+        || file_name == ".dart"
+    {
+        return Err(INVALID_FILE_PATH.to_owned());
+    }
+
+    let normalized = components.join("/");
+    let path = root.join(&normalized);
+    let parent = path.parent().ok_or_else(|| INVALID_FILE_PATH.to_owned())?;
+    let canonical_parent = parent
+        .canonicalize()
+        .map_err(|_| UNAVAILABLE_ERROR.to_owned())?;
+
+    if !canonical_parent.starts_with(root) {
+        return Err(OUTSIDE_PROJECT_ERROR.to_owned());
+    }
+
+    let exists = path.exists();
+    if exists {
+        let canonical = path
+            .canonicalize()
+            .map_err(|_| UNAVAILABLE_ERROR.to_owned())?;
+        if !canonical.starts_with(root) {
+            return Err(OUTSIDE_PROJECT_ERROR.to_owned());
+        }
+        if !canonical.is_file() {
+            return Err(INVALID_FILE_PATH.to_owned());
+        }
+    }
+
+    Ok(ProjectFileTarget {
+        relative_path: normalized,
+        path,
+        exists,
+    })
+}
+
+fn next_backup_path(path: &Path) -> Result<PathBuf, String> {
+    let parent = path.parent().ok_or_else(|| WRITE_ERROR.to_owned())?;
+    let file_name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .ok_or_else(|| WRITE_ERROR.to_owned())?;
+
+    for index in 0..1000 {
+        let candidate = if index == 0 {
+            parent.join(format!("{file_name}.bak"))
+        } else {
+            parent.join(format!("{file_name}.bak.{index}"))
+        };
+
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+
+    Err(WRITE_ERROR.to_owned())
 }
 
 fn has_visible_child(directory: &Path) -> bool {
@@ -479,6 +669,131 @@ mod tests {
         assert_eq!(
             list_directory(&root, "missing").expect_err("missing directory should be rejected"),
             UNAVAILABLE_ERROR
+        );
+    }
+
+    fn canonical_root(project: &TempProject) -> PathBuf {
+        project
+            .path
+            .canonicalize()
+            .expect("fixture should be canonicalizable")
+    }
+
+    #[test]
+    fn reads_files_under_the_project_lib() {
+        let project = flutter_project("read-file");
+        let root = canonical_root(&project);
+
+        assert_eq!(
+            read_project_file_from(&root, "lib/main.dart").expect("file should be readable"),
+            Some("void main() {}\n".to_owned())
+        );
+    }
+
+    #[test]
+    fn reports_missing_files_as_none() {
+        let project = flutter_project("missing-file");
+        let root = canonical_root(&project);
+
+        assert_eq!(
+            read_project_file_from(&root, "lib/missing.dart").expect("lookup should succeed"),
+            None
+        );
+    }
+
+    #[test]
+    fn writes_new_files_and_reports_bytes() {
+        let project = TempProject::new("write-new");
+        project.create_dir("lib");
+        let root = canonical_root(&project);
+
+        let result = write_project_file_to(&root, "lib/main.dart", "void main() {}\n")
+            .expect("file should be written");
+
+        assert_eq!(result.relative_path, "lib/main.dart");
+        assert_eq!(result.backup_path, None);
+        assert_eq!(result.bytes, 15);
+        assert_eq!(
+            fs::read_to_string(root.join("lib/main.dart")).expect("file should exist"),
+            "void main() {}\n"
+        );
+    }
+
+    #[test]
+    fn backs_up_existing_files_before_writing() {
+        let project = flutter_project("write-backup");
+        let root = canonical_root(&project);
+
+        let result = write_project_file_to(&root, "lib/main.dart", "void studio() {}\n")
+            .expect("file should be written");
+
+        assert_eq!(result.backup_path.as_deref(), Some("lib/main.dart.bak"));
+        assert_eq!(
+            fs::read_to_string(root.join("lib/main.dart.bak")).expect("backup should exist"),
+            "void main() {}\n"
+        );
+        assert_eq!(
+            fs::read_to_string(root.join("lib/main.dart")).expect("file should exist"),
+            "void studio() {}\n"
+        );
+    }
+
+    #[test]
+    fn numbers_backups_when_the_default_is_taken() {
+        let project = flutter_project("write-backup-numbered");
+        project.write("lib/main.dart.bak", "older backup\n");
+        let root = canonical_root(&project);
+
+        let result = write_project_file_to(&root, "lib/main.dart", "void studio() {}\n")
+            .expect("file should be written");
+
+        assert_eq!(result.backup_path.as_deref(), Some("lib/main.dart.bak.1"));
+        assert_eq!(
+            fs::read_to_string(root.join("lib/main.dart.bak")).expect("old backup should remain"),
+            "older backup\n"
+        );
+        assert_eq!(
+            fs::read_to_string(root.join("lib/main.dart.bak.1")).expect("new backup should exist"),
+            "void main() {}\n"
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_file_targets() {
+        let project = flutter_project("invalid-file-targets");
+        project.create_dir("lib/widgets");
+        let root = canonical_root(&project);
+
+        for relative_path in [
+            "",
+            "/etc/main.dart",
+            "../main.dart",
+            "lib/../../main.dart",
+            "pubspec.yaml",
+            "lib/main.txt",
+            "lib",
+            "lib/widgets",
+            "lib/.dart",
+        ] {
+            assert_eq!(
+                write_project_file_to(&root, relative_path, "void main() {}\n")
+                    .expect_err("path should be rejected"),
+                INVALID_FILE_PATH,
+                "expected {relative_path:?} to be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_oversized_files() {
+        let project = flutter_project("oversized-file");
+        let root = canonical_root(&project);
+        let contents = "x".repeat(MAX_FILE_BYTES + 1);
+
+        assert_eq!(
+            write_project_file_to(&root, "lib/main.dart", &contents)
+                .expect_err("oversized write should be rejected"),
+            FILE_TOO_LARGE
         );
     }
 }
