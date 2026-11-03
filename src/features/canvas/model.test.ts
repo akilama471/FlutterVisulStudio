@@ -8,6 +8,7 @@ import {
   findNodePath,
   findParent,
   insertChild,
+  MAX_HISTORY,
   removeNode,
   resolveInsertionParent,
   updateNodeProps,
@@ -192,5 +193,111 @@ describe("canvas model", () => {
     expect(describeWidget(createWidget("text", { content: "x".repeat(40) }))).toBe(
       'Text "xxxxxxxxxxxxxxxxxxxxxxxxxxx…"',
     );
+  });
+});
+
+describe("canvas history", () => {
+  it("undoes and redoes an added widget", () => {
+    const state = createInitialCanvasState();
+    const added = canvasReducer(state, { type: "add", kind: "container" });
+    const container = findNode(added.root, added.selectedId);
+
+    expect(container).not.toBeNull();
+    expect(added.past).toHaveLength(1);
+
+    const undone = canvasReducer(added, { type: "undo" });
+    expect(findNode(undone.root, added.selectedId)).toBeNull();
+    expect(undone.past).toHaveLength(0);
+    expect(undone.future).toHaveLength(1);
+
+    const redone = canvasReducer(undone, { type: "redo" });
+    expect(findNode(redone.root, added.selectedId)).not.toBeNull();
+    expect(redone.selectedId).toBe(added.selectedId);
+    expect(redone.future).toHaveLength(0);
+  });
+
+  it("undoes and redoes a deleted subtree with its selection", () => {
+    const { state, button } = starter();
+    const selected = { ...state, selectedId: button.id };
+    const deleted = canvasReducer(selected, { type: "delete" });
+
+    expect(findNode(deleted.root, button.id)).toBeNull();
+
+    const undone = canvasReducer(deleted, { type: "undo" });
+    expect(findNode(undone.root, button.id)).not.toBeNull();
+    expect(undone.selectedId).toBe(button.id);
+  });
+
+  it("coalesces consecutive edits to the same widget", () => {
+    const { state, text } = starter();
+    const selected = { ...state, selectedId: text.id };
+
+    const first = canvasReducer(selected, { type: "update", patch: { content: "A" } });
+    const second = canvasReducer(first, { type: "update", patch: { content: "AB" } });
+
+    expect(second.past).toHaveLength(1);
+    expect(findNode(second.root, text.id)?.props.content).toBe("AB");
+
+    const undone = canvasReducer(second, { type: "undo" });
+    expect(findNode(undone.root, text.id)?.props.content).toBe("Hello, Flutter!");
+
+    const redone = canvasReducer(undone, { type: "redo" });
+    expect(findNode(redone.root, text.id)?.props.content).toBe("AB");
+  });
+
+  it("starts a new history entry after the selection changes", () => {
+    const { state, text, button } = starter();
+    const textSelected = { ...state, selectedId: text.id };
+    const editedText = canvasReducer(textSelected, { type: "update", patch: { content: "New" } });
+    const buttonSelected = canvasReducer(editedText, { type: "select", id: button.id });
+    const editedButton = canvasReducer(buttonSelected, {
+      type: "update",
+      patch: { label: "Start" },
+    });
+
+    expect(editedButton.past).toHaveLength(2);
+
+    const undone = canvasReducer(editedButton, { type: "undo" });
+    expect(findNode(undone.root, button.id)?.props.label).toBe("Get started");
+    expect(findNode(undone.root, text.id)?.props.content).toBe("New");
+
+    const undoneAgain = canvasReducer(undone, { type: "undo" });
+    expect(findNode(undoneAgain.root, text.id)?.props.content).toBe("Hello, Flutter!");
+  });
+
+  it("clears redo history after a new edit", () => {
+    const state = createInitialCanvasState();
+    const added = canvasReducer(state, { type: "add", kind: "text" });
+    const undone = canvasReducer(added, { type: "undo" });
+
+    expect(undone.future).toHaveLength(1);
+
+    const replacement = canvasReducer(undone, { type: "add", kind: "row" });
+    expect(replacement.future).toHaveLength(0);
+    expect(canvasReducer(replacement, { type: "redo" })).toBe(replacement);
+  });
+
+  it("ignores undo and redo at the ends of the history", () => {
+    const state = createInitialCanvasState();
+
+    expect(canvasReducer(state, { type: "undo" })).toBe(state);
+    expect(canvasReducer(state, { type: "redo" })).toBe(state);
+  });
+
+  it("caps history and keeps only the most recent steps", () => {
+    let state = createInitialCanvasState();
+
+    for (let index = 0; index < MAX_HISTORY + 20; index += 1) {
+      state = canvasReducer(state, { type: "add", kind: "text" });
+    }
+
+    expect(state.past).toHaveLength(MAX_HISTORY);
+
+    for (let index = 0; index < MAX_HISTORY; index += 1) {
+      state = canvasReducer(state, { type: "undo" });
+    }
+
+    expect(state.past).toHaveLength(0);
+    expect(state.root.children).toHaveLength(21);
   });
 });

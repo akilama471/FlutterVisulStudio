@@ -17,16 +17,28 @@ export type CanvasNode = {
   children: CanvasNode[];
 };
 
+export type CanvasSnapshot = {
+  root: CanvasNode;
+  selectedId: string | null;
+};
+
 export type CanvasState = {
   root: CanvasNode;
   selectedId: string | null;
+  past: CanvasSnapshot[];
+  future: CanvasSnapshot[];
+  coalesceKey: string | null;
 };
 
 export type CanvasAction =
   | { type: "add"; kind: AddableWidgetKind }
   | { type: "select"; id: string | null }
   | { type: "delete" }
-  | { type: "update"; patch: Partial<WidgetProps> };
+  | { type: "update"; patch: Partial<WidgetProps> }
+  | { type: "undo" }
+  | { type: "redo" };
+
+export const MAX_HISTORY = 100;
 
 export const WIDGET_LABELS: Record<WidgetKind, string> = {
   screen: "Screen",
@@ -70,7 +82,7 @@ export function createWidget(kind: WidgetKind, props: Partial<WidgetProps> = {})
   };
 }
 
-export function createInitialCanvasState(): CanvasState {
+export function createStarterRoot(): CanvasNode {
   const column = createWidget("column");
   column.children = [
     createWidget("text", { content: "Hello, Flutter!" }),
@@ -80,7 +92,17 @@ export function createInitialCanvasState(): CanvasState {
   const root = createWidget("screen");
   root.children = [column];
 
-  return { root, selectedId: null };
+  return root;
+}
+
+export function createInitialCanvasState(): CanvasState {
+  return {
+    root: createStarterRoot(),
+    selectedId: null,
+    past: [],
+    future: [],
+    coalesceKey: null,
+  };
 }
 
 export function adoptWidgetIds(root: CanvasNode): void {
@@ -255,23 +277,45 @@ function shorten(value: string): string {
   return trimmed.length > 28 ? `${trimmed.slice(0, 27)}…` : trimmed;
 }
 
+function snapshot(state: CanvasState): CanvasSnapshot {
+  return { root: state.root, selectedId: state.selectedId };
+}
+
+function commit(
+  state: CanvasState,
+  root: CanvasNode,
+  selectedId: string | null,
+  coalesceKey: string | null,
+): CanvasState {
+  if (root === state.root && selectedId === state.selectedId) {
+    return state;
+  }
+
+  const coalesce =
+    coalesceKey !== null && coalesceKey === state.coalesceKey && state.past.length > 0;
+  const past = coalesce ? state.past : [...state.past, snapshot(state)].slice(-MAX_HISTORY);
+
+  return { root, selectedId, past, future: [], coalesceKey };
+}
+
 export function canvasReducer(state: CanvasState, action: CanvasAction): CanvasState {
   switch (action.type) {
     case "add": {
       const parent = resolveInsertionParent(state.root, state.selectedId);
       const child = createWidget(action.kind);
 
-      return {
-        root: insertChild(state.root, parent.id, child),
-        selectedId: child.id,
-      };
+      return commit(state, insertChild(state.root, parent.id, child), child.id, null);
     }
     case "select": {
       if (action.id !== null && !findNode(state.root, action.id)) {
         return state;
       }
 
-      return { ...state, selectedId: action.id };
+      if (action.id === state.selectedId) {
+        return state;
+      }
+
+      return { ...state, selectedId: action.id, coalesceKey: null };
     }
     case "delete": {
       const selected = findNode(state.root, state.selectedId);
@@ -281,19 +325,46 @@ export function canvasReducer(state: CanvasState, action: CanvasAction): CanvasS
 
       const parent = findParent(state.root, selected.id) ?? state.root;
 
-      return {
-        root: removeNode(state.root, selected.id),
-        selectedId: parent.id,
-      };
+      return commit(state, removeNode(state.root, selected.id), parent.id, null);
     }
     case "update": {
       if (!state.selectedId || !findNode(state.root, state.selectedId)) {
         return state;
       }
 
+      return commit(
+        state,
+        updateNodeProps(state.root, state.selectedId, action.patch),
+        state.selectedId,
+        `update:${state.selectedId}`,
+      );
+    }
+    case "undo": {
+      const previous = state.past[state.past.length - 1];
+      if (!previous) {
+        return state;
+      }
+
       return {
-        ...state,
-        root: updateNodeProps(state.root, state.selectedId, action.patch),
+        root: previous.root,
+        selectedId: previous.selectedId,
+        past: state.past.slice(0, -1),
+        future: [snapshot(state), ...state.future].slice(0, MAX_HISTORY),
+        coalesceKey: null,
+      };
+    }
+    case "redo": {
+      const next = state.future[0];
+      if (!next) {
+        return state;
+      }
+
+      return {
+        root: next.root,
+        selectedId: next.selectedId,
+        past: [...state.past, snapshot(state)].slice(-MAX_HISTORY),
+        future: state.future.slice(1),
+        coalesceKey: null,
       };
     }
   }

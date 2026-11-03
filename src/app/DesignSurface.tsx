@@ -31,7 +31,9 @@ type DesignSurfaceProps = {
 export function DesignSurface({ project, showInspector }: DesignSurfaceProps) {
   const [initial] = useState(() => loadDesign(project.path));
   const [canvas, dispatch] = useReducer(canvasReducer, initial.root, (savedRoot): CanvasState =>
-    savedRoot ? { root: savedRoot, selectedId: null } : createInitialCanvasState(),
+    savedRoot
+      ? { root: savedRoot, selectedId: null, past: [], future: [], coalesceKey: null }
+      : createInitialCanvasState(),
   );
   const [view, setView] = useState<DesignView>("canvas");
   const [savedRoot, setSavedRoot] = useState<CanvasNode | null>(() =>
