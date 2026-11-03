@@ -83,6 +83,20 @@ export function createInitialCanvasState(): CanvasState {
   return { root, selectedId: null };
 }
 
+export function adoptWidgetIds(root: CanvasNode): void {
+  const match = /-(\d+)$/.exec(root.id);
+  if (match) {
+    const value = Number.parseInt(match[1], 10);
+    if (Number.isFinite(value)) {
+      widgetSequence = Math.max(widgetSequence, value);
+    }
+  }
+
+  for (const child of root.children) {
+    adoptWidgetIds(child);
+  }
+}
+
 export function canHaveChildren(kind: WidgetKind): boolean {
   return kind === "screen" || kind === "column" || kind === "row" || kind === "container";
 }
