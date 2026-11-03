@@ -1,10 +1,10 @@
 # Flutter UI Studio
 
 A visual desktop studio for building Flutter user interfaces. This repository is currently at
-**Phase 3 — Dart Generation & Code Preview**: it builds on the Phase 2 visual canvas by generating
-readable Dart from the current widget tree and showing it in a read-only preview tab. The design
-still lives in memory only; generated code is never written to the project, and file writing,
-drag and drop, and undo/redo are not implemented yet.
+**Phase 4 — Design Persistence**: it builds on the Phase 3 visual canvas and Dart preview by saving
+each project's design to local application storage and restoring it the next time the project opens.
+Generated code is still never written to the Flutter project, and file writing, drag and drop, and
+undo/redo are not implemented yet.
 
 ## Stack
 
@@ -65,8 +65,19 @@ Opening a project replaces the welcome surface with the visual canvas.
 5. Use **Delete widget** to remove the selected widget and its subtree. The Screen cannot be
    deleted.
 
-The design is an in-memory scratchpad. Switching projects or restarting the application resets it
-to the starter document: a Screen containing a Column with a heading Text and a Button.
+The design is saved automatically after each edit and restored per project. The canvas header reports
+`Saving…`, `Saved locally`, or `Save failed`. Designs live in this application's local storage, keyed
+by the project path; switching projects keeps each project's design separate.
+
+### Design persistence
+
+- Edits are written 250 ms after the last change. There is no manual save button.
+- The saved tree is validated before it is written and before it is restored. Invalid or unreadable
+  data falls back to the starter document.
+- Only the widget tree is stored. Selection, active tab, and panel visibility reset on restore.
+- Clearing the application's WebView2 profile, changing the project path, or uninstalling the
+  application removes or orphans saved designs.
+- Nothing is written into the Flutter project folder, and designs are not shared between machines.
 
 ### Dart preview
 
@@ -109,7 +120,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 src/
   app/                  Application composition, design surface, shell state
   features/
-    canvas/             Widget model, reducer, canvas, palette, inspector content
+    canvas/             Widget model, reducer, canvas, inspector, local design storage
     dart/               Dart generator and read-only code preview
     editor/             Header, activity bar, editor tabs, status bar
     inspector/          Inspector panel shell
@@ -129,23 +140,26 @@ docs/                   Engineering plans and reports
 
 Features may depend on `shared`, never the reverse. Cross-feature composition lives in `app/`.
 
-## Phase 3 scope
+## Phase 4 scope
 
 Included:
 
-- Pure Dart generator for the six Phase 2 widget kinds.
-- Self-contained Material app shell with `StudioApp` and a `StudioScreen` scaffold.
-- Two-space indentation, escaped string literals, colour parsing, and layout spacers.
-- Canvas and Dart editor tabs; Canvas remains the default.
-- Read-only monospaced Dart preview regenerated from the latest canvas state.
-- Copy-to-clipboard action with success and failure feedback.
-- Generator unit tests and UI tests for tab switching, regeneration, and clipboard states.
+- Per-project design persistence in `window.localStorage`, keyed by the project path.
+- Automatic 250 ms debounced save after canvas edits, with `Saving…`, `Saved locally`, and
+  `Save failed` status in the canvas header.
+- Automatic restore when a project opens, including after an application restart.
+- Defensive validation of saved payloads: Screen root, known widget kinds, unique IDs, valid props,
+  inspector limits, node/depth caps, and rejection of nested Screens or leaf children.
+- Widget ID adoption so newly added widgets cannot collide with restored IDs.
+- Storage unit tests and UI tests for restore, autosave, fallback, and save failure.
+- All Phase 3 canvas, inspector, Dart, and clipboard behaviour is retained.
 
 Not included (future phases):
 
-- Writing or overwriting files in the Flutter project.
+- Writing or overwriting design or Dart files in the Flutter project.
+- Cloud sync, export/import, named design slots, manual save dialogs, or version history.
+- Schema migration from future payload versions.
 - Editing, analysing, or formatting generated code with the Flutter toolchain.
-- Design persistence between launches or across projects.
 - Drag and drop, reordering, multi-select, copy/paste, undo/redo.
 - Responsive breakpoints, constraints, alignment, theming, assets, animations, gestures, and full
   Flutter widget coverage.
