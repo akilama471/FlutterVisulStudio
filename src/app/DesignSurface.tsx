@@ -70,7 +70,7 @@ export function DesignSurface({ project, showInspector }: DesignSurfaceProps) {
             saveStatus={saveStatus}
           />
         ) : (
-          <DartPreview code={code} />
+          <DartPreview code={code} project={project} />
         )}
       </EditorArea>
       {showInspector ? (

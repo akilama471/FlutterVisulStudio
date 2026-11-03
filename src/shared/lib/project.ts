@@ -16,6 +16,12 @@ export type ProjectEntry = {
   hasChildren: boolean;
 };
 
+export type ProjectWriteResult = {
+  relativePath: string;
+  backupPath: string | null;
+  bytes: number;
+};
+
 export class ProjectError extends Error {
   constructor(message: string) {
     super(message);
@@ -56,7 +62,25 @@ function isProjectEntry(value: unknown): value is ProjectEntry {
   );
 }
 
-export function projectErrorMessage(error: unknown): string {
+function isProjectWriteResult(value: unknown): value is ProjectWriteResult {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.relativePath === "string" &&
+    value.relativePath.length > 0 &&
+    (value.backupPath === null || typeof value.backupPath === "string") &&
+    typeof value.bytes === "number" &&
+    Number.isInteger(value.bytes) &&
+    value.bytes >= 0
+  );
+}
+
+export function projectErrorMessage(
+  error: unknown,
+  fallback = "The project could not be opened.",
+): string {
   if (error instanceof ProjectError) {
     return error.message;
   }
@@ -65,7 +89,7 @@ export function projectErrorMessage(error: unknown): string {
     return error.trim();
   }
 
-  return "The project could not be opened.";
+  return fallback;
 }
 
 export async function selectProjectFolder(): Promise<string | null> {
@@ -115,5 +139,48 @@ export async function listProjectDirectory(relativePath: string): Promise<Projec
     }
 
     throw new ProjectError(projectErrorMessage(error));
+  }
+}
+
+export async function readProjectFile(relativePath: string): Promise<string | null> {
+  try {
+    const result: unknown = await invoke("read_project_file", { relativePath });
+
+    if (result === null) {
+      return null;
+    }
+
+    if (typeof result !== "string") {
+      throw new ProjectError("The project file could not be read.");
+    }
+
+    return result;
+  } catch (error) {
+    if (error instanceof ProjectError) {
+      throw error;
+    }
+
+    throw new ProjectError(projectErrorMessage(error, "The project file could not be read."));
+  }
+}
+
+export async function writeProjectFile(
+  relativePath: string,
+  contents: string,
+): Promise<ProjectWriteResult> {
+  try {
+    const result: unknown = await invoke("write_project_file", { relativePath, contents });
+
+    if (!isProjectWriteResult(result)) {
+      throw new ProjectError("The project file could not be written.");
+    }
+
+    return result;
+  } catch (error) {
+    if (error instanceof ProjectError) {
+      throw error;
+    }
+
+    throw new ProjectError(projectErrorMessage(error, "The project file could not be written."));
   }
 }
