@@ -8,6 +8,7 @@ const plannedCapabilities = [
   { icon: "grid", label: "Visual canvas" },
   { icon: "code", label: "Dart generation" },
   { icon: "file", label: "Saved designs" },
+  { icon: "sparkles", label: "Safe project writes" },
 ] as const;
 
 type EditorWelcomeProps = {
@@ -44,8 +45,8 @@ export function EditorWelcome({ status, onOpenProject }: EditorWelcomeProps) {
           </Button>
         </div>
         <p className="welcome__note">
-          Phase 4 saves each canvas design locally and restores it when the project reopens. Open a
-          project to keep composing.
+          Phase 5 can write the generated Dart to your project after a diff review, with a backup of
+          the existing entry point. Open a project to start composing.
         </p>
       </div>
     </section>
