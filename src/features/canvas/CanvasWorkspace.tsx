@@ -2,6 +2,7 @@ import type { Dispatch } from "react";
 import { Button } from "../../shared/components/Button";
 import { Icon, type IconName } from "../../shared/components/Icon";
 import { CanvasNodeView } from "./CanvasNodeView";
+import type { DesignSaveStatus } from "./designStorage";
 import {
   findNode,
   resolveInsertionParent,
@@ -19,13 +20,25 @@ const palette: Array<{ kind: AddableWidgetKind; label: string; icon: IconName }>
   { kind: "column", label: "Column", icon: "column" },
 ];
 
+const SAVE_LABELS: Record<DesignSaveStatus, string> = {
+  saving: "Saving…",
+  saved: "Saved locally",
+  error: "Save failed",
+};
+
 type CanvasWorkspaceProps = {
   canvas: CanvasState;
   dispatch: Dispatch<CanvasAction>;
   projectName: string;
+  saveStatus: DesignSaveStatus;
 };
 
-export function CanvasWorkspace({ canvas, dispatch, projectName }: CanvasWorkspaceProps) {
+export function CanvasWorkspace({
+  canvas,
+  dispatch,
+  projectName,
+  saveStatus,
+}: CanvasWorkspaceProps) {
   const selected = findNode(canvas.root, canvas.selectedId);
   const insertionParent = resolveInsertionParent(canvas.root, canvas.selectedId);
   const canDelete = selected !== null && selected.kind !== "screen";
@@ -39,9 +52,20 @@ export function CanvasWorkspace({ canvas, dispatch, projectName }: CanvasWorkspa
             {projectName} · Select a widget, then add into the highlighted container.
           </p>
         </div>
-        <span className="canvas-header__selection">
-          {selected ? `${WIDGET_LABELS[selected.kind]} selected` : "Nothing selected"}
-        </span>
+        <div className="canvas-header__meta">
+          <span
+            className={`canvas-save canvas-save--${saveStatus}`}
+            role="status"
+            aria-live="polite"
+            title="Designs are stored in this application's local storage."
+          >
+            <span className="canvas-save__dot" aria-hidden="true" />
+            {SAVE_LABELS[saveStatus]}
+          </span>
+          <span className="canvas-header__selection">
+            {selected ? `${WIDGET_LABELS[selected.kind]} selected` : "Nothing selected"}
+          </span>
+        </div>
       </header>
 
       <div className="canvas-toolbar">
