@@ -1,6 +1,8 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { designStorageKey, loadDesign, saveDesign } from "../features/canvas/designStorage";
+import { createWidget, type CanvasNode } from "../features/canvas/model";
 import { DesignSurface } from "./DesignSurface";
 
 const PROJECT = {
@@ -13,7 +15,37 @@ function renderSurface() {
   return render(<DesignSurface project={PROJECT} showInspector />);
 }
 
+function designWithText(content: string): CanvasNode {
+  const screen = createWidget("screen");
+  const column = createWidget("column");
+  column.children = [createWidget("text", { content })];
+  screen.children = [column];
+  return screen;
+}
+
+function firstTextContent(root: CanvasNode | null): string | null {
+  if (!root) {
+    return null;
+  }
+
+  if (root.kind === "text") {
+    return root.props.content;
+  }
+
+  for (const child of root.children) {
+    const content = firstTextContent(child);
+    if (content !== null) {
+      return content;
+    }
+  }
+
+  return null;
+}
+
 describe("DesignSurface", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
   it("shows Canvas and Dart tabs with the canvas active by default", () => {
     renderSurface();
 
@@ -22,6 +54,49 @@ describe("DesignSurface", () => {
     expect(
       screen.queryByRole("heading", { level: 1, name: "Dart preview" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("restores a saved design when the surface mounts", async () => {
+    saveDesign(PROJECT.path, designWithText("Restored heading"));
+    renderSurface();
+
+    expect(screen.getByRole("treeitem", { name: 'Text "Restored heading"' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("treeitem", { name: 'Text "Hello, Flutter!"' }),
+    ).not.toBeInTheDocument();
+    expect(await screen.findByText("Saved locally")).toBeInTheDocument();
+  });
+
+  it("falls back to the starter design when the saved payload is invalid", () => {
+    window.localStorage.setItem(designStorageKey(PROJECT.path), "{");
+
+    renderSurface();
+
+    expect(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' })).toBeInTheDocument();
+  });
+
+  it("autosaves canvas edits to local storage", async () => {
+    const user = userEvent.setup();
+    renderSurface();
+
+    await user.click(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' }));
+    const content = screen.getByLabelText("Content");
+    await user.clear(content);
+    await user.type(content, "Persisted heading");
+
+    await waitFor(() => {
+      expect(firstTextContent(loadDesign(PROJECT.path).root)).toBe("Persisted heading");
+    });
+    expect(await screen.findByText("Saved locally")).toBeInTheDocument();
+  });
+
+  it("shows a save failure when local storage rejects the write", async () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    renderSurface();
+
+    expect(await screen.findByText("Save failed")).toBeInTheDocument();
   });
 
   it("renders generated Dart for the current canvas", async () => {
