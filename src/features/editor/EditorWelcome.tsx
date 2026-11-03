@@ -7,6 +7,7 @@ const plannedCapabilities = [
   { icon: "layers", label: "Project workspace" },
   { icon: "grid", label: "Visual canvas" },
   { icon: "code", label: "Dart generation" },
+  { icon: "file", label: "Saved designs" },
 ] as const;
 
 type EditorWelcomeProps = {
@@ -29,7 +30,7 @@ export function EditorWelcome({ status, onOpenProject }: EditorWelcomeProps) {
           Compose Flutter interfaces visually and keep the generated Dart readable, owned, and ready
           for production.
         </p>
-        <ul className="welcome__roadmap" aria-label="Capabilities planned for upcoming phases">
+        <ul className="welcome__roadmap" aria-label="Capabilities available today">
           {plannedCapabilities.map((capability) => (
             <li key={capability.label}>
               <Icon name={capability.icon} size={14} />
@@ -43,8 +44,8 @@ export function EditorWelcome({ status, onOpenProject }: EditorWelcomeProps) {
           </Button>
         </div>
         <p className="welcome__note">
-          Phase 3 adds a read-only Dart preview generated from the canvas. Open a project to start
-          composing or review the generated code.
+          Phase 4 saves each canvas design locally and restores it when the project reopens. Open a
+          project to keep composing.
         </p>
       </div>
     </section>
