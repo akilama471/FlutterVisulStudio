@@ -1,10 +1,10 @@
 # Flutter UI Studio
 
 A visual desktop studio for building Flutter user interfaces. This repository is currently at
-**Phase 4 — Design Persistence**: it builds on the Phase 3 visual canvas and Dart preview by saving
-each project's design to local application storage and restoring it the next time the project opens.
-Generated code is still never written to the Flutter project, and file writing, drag and drop, and
-undo/redo are not implemented yet.
+**Phase 5 — Safe Dart Apply**: it builds on the Phase 4 canvas and local design persistence by
+reviewing a line-by-line diff and writing the generated Dart to the project entry point, with a
+backup of the existing file. Other project files are still never modified, and drag and drop,
+undo/redo, and toolchain execution are not implemented yet.
 
 ## Stack
 
@@ -91,7 +91,23 @@ The editor has **Canvas** and **Dart** tabs while a project is open.
 4. Switching back to **Canvas** preserves the design and inspector selection.
 
 Generated code is a self-contained `lib/main.dart`-style file with a Material app shell and a
-`StudioScreen` scaffold. It is displayed only; nothing is written to the Flutter project on disk.
+`StudioScreen` scaffold. The preview itself is read-only; use the apply flow below to write it.
+
+### Applying generated Dart
+
+1. Select the **Dart** tab and choose **Apply to project**.
+2. The studio reads the project entry point (`lib/main.dart`, or a new file when missing) and opens
+   a review dialog with the exact target path and a line-by-line diff.
+3. Choose **Write to project** to apply the generated code, or **Cancel** to leave the project
+   untouched. Escape also cancels.
+4. An existing entry point is backed up first as `lib/main.dart.bak`, then `.bak.1`, `.bak.2`, and so
+   on. The header reports `Written to lib/main.dart` and the backup path.
+5. A missing entry point is created without a backup.
+
+Only the project entry point is written, and only after an explicit confirmation. The target is
+validated again in Rust: it must be a `.dart` file under the project's `lib/` folder, it cannot
+escape the active project, and contents are capped at 1 MiB. The studio does not run, analyse, or
+format the project after writing.
 
 ## Scripts
 
@@ -121,7 +137,7 @@ src/
   app/                  Application composition, design surface, shell state
   features/
     canvas/             Widget model, reducer, canvas, inspector, local design storage
-    dart/               Dart generator and read-only code preview
+    dart/               Dart generator, line diff, apply dialog, read-only preview
     editor/             Header, activity bar, editor tabs, status bar
     inspector/          Inspector panel shell
     project/            Project picker, workspace hook, storage, lazy file tree
@@ -131,7 +147,7 @@ src/
     styles/             Design tokens and global styles
   test/                 Test setup
 src-tauri/
-  src/commands/         Rust commands (`app_info`, project workspace)
+  src/commands/         Rust commands (`app_info`, project workspace, safe file read/write)
   capabilities/         Least-privilege Tauri capability file
   icons/                Generated application icons
 assets/                 Source artwork for generated icons
@@ -140,30 +156,31 @@ docs/                   Engineering plans and reports
 
 Features may depend on `shared`, never the reverse. Cross-feature composition lives in `app/`.
 
-## Phase 4 scope
+## Phase 5 scope
 
 Included:
 
-- Per-project design persistence in `window.localStorage`, keyed by the project path.
-- Automatic 250 ms debounced save after canvas edits, with `Saving…`, `Saved locally`, and
-  `Save failed` status in the canvas header.
-- Automatic restore when a project opens, including after an application restart.
-- Defensive validation of saved payloads: Screen root, known widget kinds, unique IDs, valid props,
-  inspector limits, node/depth caps, and rejection of nested Screens or leaf children.
-- Widget ID adoption so newly added widgets cannot collide with restored IDs.
-- Storage unit tests and UI tests for restore, autosave, fallback, and save failure.
-- All Phase 3 canvas, inspector, Dart, and clipboard behaviour is retained.
+- **Apply to project** action in the Dart preview.
+- Entry-point read and line-by-line diff before writing.
+- Explicit confirmation dialog; no silent writes.
+- Backup of an existing entry point (`lib/main.dart.bak`, then numbered).
+- Creation of a missing entry point without a backup.
+- Rust-side target validation: active project only, `lib/` only, `.dart` only, size-capped.
+- `Written to …` / failure feedback, including the backup path.
+- Unit tests for diffing, the review dialog, the apply flow, and safe Rust file operations.
+- All Phase 0–4 project, canvas, inspector, persistence, Dart, and clipboard behaviour is retained.
 
 Not included (future phases):
 
-- Writing or overwriting design or Dart files in the Flutter project.
-- Cloud sync, export/import, named design slots, manual save dialogs, or version history.
-- Schema migration from future payload versions.
-- Editing, analysing, or formatting generated code with the Flutter toolchain.
+- Writing design JSON or any file other than the Dart entry point.
+- Editing generated code before writing, or a general writable file editor.
+- Running, analysing, or formatting the project with the Flutter toolchain after writing.
+- File watching, external-change detection, or reloading the preview from disk.
+- Multi-file generation, cloud sync, export/import, or design sharing.
 - Drag and drop, reordering, multi-select, copy/paste, undo/redo.
 - Responsive breakpoints, constraints, alignment, theming, assets, animations, gestures, and full
   Flutter widget coverage.
-- Opening or editing project file contents, file watching, multi-root workspaces.
+- Opening or editing arbitrary project file contents, multi-root workspaces.
 
 ## License
 
