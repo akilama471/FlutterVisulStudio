@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { listProjectDirectory, openProject, ProjectError } from "./project";
+import {
+  listProjectDirectory,
+  openProject,
+  ProjectError,
+  readProjectFile,
+  writeProjectFile,
+} from "./project";
 
 const { invokeMock, openMock } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
@@ -62,5 +68,55 @@ describe("project service", () => {
     invokeMock.mockResolvedValue([{ name: "lib", kind: "unknown" }]);
 
     await expect(listProjectDirectory("")).rejects.toBeInstanceOf(ProjectError);
+  });
+
+  it("reads a project file through the Tauri command", async () => {
+    invokeMock.mockResolvedValue("void main() {}\n");
+
+    await expect(readProjectFile("lib/main.dart")).resolves.toBe("void main() {}\n");
+    expect(invokeMock).toHaveBeenCalledWith("read_project_file", { relativePath: "lib/main.dart" });
+  });
+
+  it("reports a missing project file as null", async () => {
+    invokeMock.mockResolvedValue(null);
+
+    await expect(readProjectFile("lib/main.dart")).resolves.toBeNull();
+  });
+
+  it("rejects malformed project file contents", async () => {
+    invokeMock.mockResolvedValue(42);
+
+    await expect(readProjectFile("lib/main.dart")).rejects.toThrow(
+      "The project file could not be read.",
+    );
+  });
+
+  it("writes a project file and validates the result", async () => {
+    const result = {
+      relativePath: "lib/main.dart",
+      backupPath: "lib/main.dart.bak",
+      bytes: 15,
+    };
+    invokeMock.mockResolvedValue(result);
+
+    await expect(writeProjectFile("lib/main.dart", "void studio() {}\n")).resolves.toEqual(result);
+    expect(invokeMock).toHaveBeenCalledWith("write_project_file", {
+      relativePath: "lib/main.dart",
+      contents: "void studio() {}\n",
+    });
+  });
+
+  it("rejects malformed write results", async () => {
+    invokeMock.mockResolvedValue({ relativePath: "lib/main.dart", bytes: -1 });
+
+    await expect(writeProjectFile("lib/main.dart", "code")).rejects.toBeInstanceOf(ProjectError);
+  });
+
+  it("surfaces write failures with a file-specific fallback", async () => {
+    invokeMock.mockRejectedValue(new Error("unexpected"));
+
+    await expect(writeProjectFile("lib/main.dart", "code")).rejects.toThrow(
+      "The project file could not be written.",
+    );
   });
 });
