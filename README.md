@@ -1,10 +1,11 @@
 # Flutter UI Studio
 
 A visual desktop studio for building Flutter user interfaces. This repository is currently at
-**Phase 8 - Project Explorer Completion**: it builds on the Phase 7 workspace by making the explorer
-open, edit, save, and safely reload real project text files in editor tabs. Designs still live in
-local storage, file tabs are not persisted, and drag and drop plus toolchain execution are not
-implemented yet.
+**Phase 9 - Canvas Editing Depth**: it builds on the Phase 8 workspace by completing the canvas
+editing model. Widgets can be reordered by drag and drop or the keyboard, selected in groups,
+duplicated, copied across canvases, and undone per canvas across restarts. Designs still live in
+local storage, file tabs are not persisted, and Flutter toolchain execution is not implemented
+yet.
 
 ## Stack
 
@@ -85,15 +86,31 @@ Opening a project replaces the welcome surface with the visual canvas.
    goes into its parent; with nothing selected, it goes into the Screen. The toolbar shows the
    current target.
 3. Click any widget on the canvas to select it. The inspector shows its hierarchy, type, and ID.
+   `Ctrl`/`Cmd`+click adds or removes one widget; `Shift`+click extends the selection from the anchor
+   over the visible tree order.
 4. Edit properties in the inspector and the canvas updates immediately:
    - **Text** content and **Button** label.
    - **Row** and **Column** gap.
    - **Container** padding and background.
    - **Screen** background.
-5. Use **Delete widget** to remove the selected widget and its subtree. The Screen cannot be
-   deleted.
-6. Use the header **Undo** / **Redo** buttons, or `Ctrl+Z`, `Ctrl+Y`, and `Ctrl+Shift+Z`, to move
-   through edit history. The last 100 steps are kept for the mounted canvas.
+     A multi-selection edits a shared property when every selected widget has the same kind; fields
+     with different values show a **Mixed values** placeholder.
+5. Drag a widget onto another to move it. Dropping near the top or bottom edge inserts before or
+   after the target; dropping in the middle of a Row, Column, Container, or Screen moves the widget
+   inside it. Dragging one selected widget moves the whole selection.
+6. Use **Copy selection**, **Duplicate selection**, and **Paste** in the toolbar, or `Ctrl+C`,
+   `Ctrl+D`, and `Ctrl+V`. Copied widgets can be pasted into a different canvas. The paste is cloned
+   with fresh widget ids and selected.
+7. Use **Delete widget**, `Delete`, or `Backspace` to remove the selection and its descendants. The
+   Screen cannot be deleted; deleting the rest selects the parent.
+8. Use the header **Undo** / **Redo** buttons, or `Ctrl+Z`, `Ctrl+Y`, and `Ctrl+Shift+Z`, to move
+   through edit history. The last 100 steps are kept per canvas and survive canvas switches and
+   application restarts.
+
+The widget tree follows the ARIA tree keyboard model. Only the focused tree item is in the tab order;
+`ArrowUp`/`ArrowDown` walk the visible order, `Home`/`End` jump to the ends, `ArrowRight` expands or
+enters a container, `ArrowLeft` collapses or leaves it, `Shift+Arrow` extends the selection,
+`Ctrl+Arrow` reorders the anchor among its siblings, and `Ctrl+Space` toggles the focused widget.
 
 The design is saved automatically after each edit and restored per project. The canvas header reports
 `Saving…`, `Saved locally`, or `Save failed`. Designs live in this application's local storage, keyed
@@ -111,15 +128,21 @@ Each project holds one or more canvases, listed under **Canvases** in the explor
 3. Use the pencil button on a canvas row to rename it. Names are trimmed, must be 1–60 characters,
    and must be unique within the project regardless of case. The dialog validates as you type and
    saves with Enter or **Save name**; Escape cancels.
-4. Use the trash button on a canvas row to delete it. A confirmation dialog appears first, and the
+4. Use the copy button on a canvas row to duplicate it. The copy is inserted directly after its
+   source, named `<name> copy` (with a numeric suffix if needed), receives fresh widget ids, and
+   becomes active. A duplicated canvas starts with empty undo/redo history.
+5. Drag a canvas row onto another to reorder it. Dropping on the top half inserts before the target;
+   the bottom half inserts after it. Reordering does not change the active canvas.
+6. Use the trash button on a canvas row to delete it. A confirmation dialog appears first, and the
    last remaining canvas cannot be deleted.
-5. After deleting, a notification offers **Undo** for 10 seconds (or **Dismiss**). Undoing restores
+7. After deleting, a notification offers **Undo** for 10 seconds (or **Dismiss**). Undoing restores
    the canvas at its previous position with its widgets intact. Deleting several canvases quickly
    stacks one notification per canvas, each with its own timer, so every deletion stays recoverable
    independently.
 
-Undo/redo history is per mounted canvas: switching canvases or restarting the application starts a
-fresh history. Designs from earlier versions migrate into a single canvas named **Main**.
+Undo/redo history is stored per canvas and survives canvas switches and application restarts. A
+history entry is discarded when it no longer matches the saved widget tree. Designs from earlier
+versions migrate into a single canvas named **Main**.
 
 All dialogs keep keyboard focus inside themselves while open: Tab and Shift+Tab cycle through their
 controls, Escape closes them, and focus returns to the button that opened the dialog. The canvas
@@ -132,8 +155,8 @@ undo/redo shortcuts are ignored while a dialog is open.
   not lose the last change.
 - The saved canvas set is validated before it is written and before it is restored. Invalid or
   unreadable data falls back to a single starter canvas.
-- Widget trees and the active canvas are stored. Selection, undo/redo history, active tab, and panel
-  visibility reset on restore.
+- Widget trees, the active canvas, and per-canvas undo/redo history are stored. Selection, active
+  tab, and panel visibility reset on restore.
 - Large designs are measured in UTF-8 bytes. Above 1 MiB, the explorer shows an advisory warning with
   the current size and suggests deleting unused canvases. The real limit is set by WebView2, so the
   warning does not block editing.
@@ -221,39 +244,36 @@ docs/                   Engineering plans and reports
 
 Features may depend on `shared`, never the reverse. Cross-feature composition lives in `app/`.
 
-## Phase 8 scope
+## Phase 9 scope
 
 Included:
 
-- Opening any existing UTF-8 text file under the project in a closable editor tab beside the fixed
-  **Canvas** and **Dart** tabs.
-- A dependency-free monospace editor with a synced line gutter, dirty state, byte/line counts, and
-  explicit **Save** plus `Ctrl+S`.
-- Safe text commands in Rust with canonical root checks, ignored-folder rejection, UTF-8/NUL
-  validation, a 1 MiB cap, modified-time conflict detection, and numbered sibling backups.
-- Automatic reload of clean files and an external-change banner with **Reload** and **Overwrite** for
-  dirty files, including save conflicts.
-- Manual explorer refresh that re-lists the root and every expanded folder, plus a refresh after each
-  successful save.
-- A dirty-tab discard dialog and a best-effort `beforeunload` guard while any file tab is unsaved.
-- A file inspector showing path, size, encoding, modified time, save status, and last backup.
-- Tests for text service validation, explorer opening and refresh, the file workspace lifecycle, and
-  the end-to-end App flow.
-- All Phase 0–7 project, canvas, inspector, persistence, Dart, clipboard, safe apply, undo/redo, and
-  multi-canvas behaviour is retained.
+- Drag and drop to reorder widgets and move subtrees between containers, with an insertion line for
+  before/after and an accent ring for inside drops.
+- Multi-selection with `Ctrl`/`Cmd` and `Shift`, group delete, and shared inspector edits when all
+  selected widgets have the same kind.
+- Duplicate, copy/paste within and across canvases, and keyboard copy/paste/duplicate shortcuts.
+- A full ARIA tree keyboard model with roving tabindex, arrow navigation, `Home`/`End`,
+  expand/collapse, range selection, and keyboard reorder.
+- Undo/redo history persisted per canvas across canvas switches and restarts, with fingerprint checks,
+  snapshot limits, and debounced storage writes.
+- Per-canvas duplicate and drag reorder in the explorer, including unique copy names and fresh
+  widget ids.
+- Tests for the model actions, history storage, canvas set helpers, inspector, keyboard model,
+  drag/drop, copy/paste, history restart, and explorer interactions.
+- All Phase 0–8 project, canvas, inspector, persistence, Dart, clipboard, safe apply, multi-canvas,
+  and file-editing behaviour is retained.
 
 Not included (future phases):
 
+- Arbitrary layout constraints, responsive breakpoints, and free-form canvas positioning.
+- Copying to or pasting from the operating-system clipboard for canvas widgets.
+- Multi-drag reparenting rules beyond top-level selected subtrees.
 - Creating, renaming, deleting, moving, or drag-and-dropping project files.
 - Syntax highlighting, code folding, search/replace, or diagnostics in the file editor.
 - File watching or background polling for external changes.
 - Persisting open file tabs or unsaved buffers across project switches or restarts.
-- A project-switch prompt for unsaved file tabs.
-- Binary or asset previews and editing files outside the open project.
-- Persisting undo/redo history across canvas switches or application restarts.
-- Reordering canvases by drag and drop, duplicating a canvas, multi-select, or copy/paste.
 - Exporting or importing designs, cloud sync, or storing designs in the project folder.
-- A full ARIA tree keyboard model (arrow-key navigation between widgets).
 - Editing generated code before writing, or running, analysing, or formatting the project with the
   Flutter toolchain.
 - Responsive breakpoints, constraints, alignment, theming, assets, animations, gestures, and full
