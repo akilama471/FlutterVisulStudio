@@ -241,8 +241,20 @@ describe("DesignSurface", () => {
 
     expect(screen.getByRole("heading", { level: 1, name: "Canvas" })).toBeInTheDocument();
     expect(screen.getByRole("treeitem", { name: "Screen" })).toBeInTheDocument();
-    expect(screen.getByRole("treeitem", { name: "Column" })).toBeInTheDocument();
-    expect(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' })).toBeInTheDocument();
+    expect(screen.getByRole("treeitem", { name: "Screen" })).toHaveAttribute("aria-level", "1");
+    expect(screen.getByRole("treeitem", { name: "Column" })).toHaveAttribute("aria-level", "2");
+    expect(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' })).toHaveAttribute(
+      "aria-level",
+      "3",
+    );
+    expect(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' })).toHaveAttribute(
+      "aria-posinset",
+      "1",
+    );
+    expect(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' })).toHaveAttribute(
+      "aria-setsize",
+      "2",
+    );
     expect(screen.getByRole("treeitem", { name: 'Button "Get started"' })).toBeInTheDocument();
     expect(
       within(screen.getByRole("complementary", { name: "Inspector" })).getByText(
@@ -414,6 +426,8 @@ describe("DesignSurface", () => {
 
     const undo = screen.getByRole("button", { name: "Undo" });
     const redo = screen.getByRole("button", { name: "Redo" });
+    expect(undo).toHaveAttribute("aria-keyshortcuts", "Control+Z");
+    expect(redo).toHaveAttribute("aria-keyshortcuts", "Control+Y Control+Shift+Z");
     expect(undo).toBeDisabled();
     expect(redo).toBeDisabled();
 
@@ -447,6 +461,24 @@ describe("DesignSurface", () => {
     await user.keyboard("{Control>}z{/Control}");
     await user.keyboard("{Control>}y{/Control}");
     expect(screen.getByRole("treeitem", { name: 'Text "Text"' })).toBeInTheDocument();
+  });
+
+  it("ignores undo shortcuts while a dialog is open", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: "Add Text" }));
+    expect(screen.getByRole("treeitem", { name: 'Text "Text"' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Rename Canvas 1" }));
+    await user.tab();
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+
+    await user.keyboard("{Control>}z{/Control}");
+    expect(screen.getByRole("treeitem", { name: 'Text "Text"' })).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("autosaves an undone edit", async () => {

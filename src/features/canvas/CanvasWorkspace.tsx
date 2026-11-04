@@ -65,6 +65,7 @@ export function CanvasWorkspace({
               className="canvas-history__button"
               label="Undo"
               icon="undo"
+              ariaKeyshortcuts="Control+Z"
               disabled={!canUndo}
               onClick={() => dispatch({ type: "undo" })}
             />
@@ -72,6 +73,7 @@ export function CanvasWorkspace({
               className="canvas-history__button"
               label="Redo"
               icon="redo"
+              ariaKeyshortcuts="Control+Y Control+Shift+Z"
               disabled={!canRedo}
               onClick={() => dispatch({ type: "redo" })}
             />

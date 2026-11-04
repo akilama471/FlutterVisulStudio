@@ -79,6 +79,10 @@ function CanvasEditorSurface({
         return;
       }
 
+      if (document.querySelector('[role="dialog"]')) {
+        return;
+      }
+
       const target = event.target;
       if (
         target instanceof HTMLElement &&

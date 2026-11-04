@@ -5,9 +5,19 @@ type CanvasNodeViewProps = {
   node: CanvasNode;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  depth?: number;
+  index?: number;
+  siblingCount?: number;
 };
 
-export function CanvasNodeView({ node, selectedId, onSelect }: CanvasNodeViewProps) {
+export function CanvasNodeView({
+  node,
+  selectedId,
+  onSelect,
+  depth = 0,
+  index = 0,
+  siblingCount = 1,
+}: CanvasNodeViewProps) {
   const selected = node.id === selectedId;
   const classes = [
     "canvas-node",
@@ -35,6 +45,9 @@ export function CanvasNodeView({ node, selectedId, onSelect }: CanvasNodeViewPro
     tabIndex: 0,
     "aria-label": describeWidget(node),
     "aria-selected": selected,
+    "aria-level": depth + 1,
+    "aria-posinset": index + 1,
+    "aria-setsize": siblingCount,
     "data-kind": WIDGET_LABELS[node.kind],
     className: classes,
     onClick: handleClick,
@@ -50,8 +63,16 @@ export function CanvasNodeView({ node, selectedId, onSelect }: CanvasNodeViewPro
   }
 
   const style = layoutStyle(node);
-  const children = node.children.map((child) => (
-    <CanvasNodeView key={child.id} node={child} selectedId={selectedId} onSelect={onSelect} />
+  const children = node.children.map((child, childIndex) => (
+    <CanvasNodeView
+      key={child.id}
+      node={child}
+      selectedId={selectedId}
+      onSelect={onSelect}
+      depth={depth + 1}
+      index={childIndex}
+      siblingCount={node.children.length}
+    />
   ));
 
   return (

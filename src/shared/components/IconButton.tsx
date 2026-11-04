@@ -6,6 +6,7 @@ type IconButtonProps = {
   active?: boolean;
   disabled?: boolean;
   className?: string;
+  ariaKeyshortcuts?: string;
   onClick?: () => void;
 };
 
@@ -15,6 +16,7 @@ export function IconButton({
   active,
   disabled = false,
   className,
+  ariaKeyshortcuts,
   onClick,
 }: IconButtonProps) {
   return (
@@ -23,6 +25,7 @@ export function IconButton({
       className={className ? `icon-button ${className}` : "icon-button"}
       aria-label={label}
       aria-pressed={active}
+      aria-keyshortcuts={ariaKeyshortcuts}
       title={label}
       disabled={disabled}
       onClick={onClick}
