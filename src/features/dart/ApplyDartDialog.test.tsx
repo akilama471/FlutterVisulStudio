@@ -57,6 +57,22 @@ describe("ApplyDartDialog", () => {
     expect(props.onCancel).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps Tab inside the dialog", async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    const cancel = screen.getByRole("button", { name: "Cancel" });
+    const confirm = screen.getByRole("button", { name: "Write to project" });
+    expect(cancel).toHaveFocus();
+
+    await user.tab();
+    expect(confirm).toHaveFocus();
+    await user.tab();
+    expect(cancel).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(confirm).toHaveFocus();
+  });
+
   it("cancels with Escape and shows errors", async () => {
     const user = userEvent.setup();
     const props = renderDialog({ error: "The project file could not be written." });

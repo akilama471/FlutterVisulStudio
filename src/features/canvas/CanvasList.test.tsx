@@ -108,6 +108,45 @@ describe("CanvasList", () => {
     expect(screen.getByRole("button", { name: "Canvas 2" })).toBeInTheDocument();
   });
 
+  it("traps Tab inside dialogs and restores the trigger focus", async () => {
+    const user = userEvent.setup();
+    renderList();
+
+    await user.click(screen.getByRole("button", { name: "New canvas" }));
+    await user.click(screen.getByRole("button", { name: "Rename Canvas 2" }));
+
+    const input = screen.getByLabelText("Canvas name");
+    const cancel = screen.getByRole("button", { name: "Cancel" });
+    const save = screen.getByRole("button", { name: "Save name" });
+    expect(input).toHaveFocus();
+
+    await user.clear(input);
+    await user.type(input, "Renamed");
+    await user.tab();
+    expect(cancel).toHaveFocus();
+    await user.tab();
+    expect(save).toHaveFocus();
+    await user.tab();
+    expect(input).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(save).toHaveFocus();
+    await user.keyboard("{Escape}");
+
+    const renameTrigger = screen.getByRole("button", { name: "Rename Canvas 2" });
+    expect(renameTrigger).toHaveFocus();
+
+    await user.click(screen.getByRole("button", { name: "Delete Canvas 2" }));
+    const deleteCancel = screen.getByRole("button", { name: "Cancel" });
+    const confirm = screen.getByRole("button", { name: "Delete canvas" });
+    expect(deleteCancel).toHaveFocus();
+    await user.tab();
+    expect(confirm).toHaveFocus();
+    await user.tab();
+    expect(deleteCancel).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("button", { name: "Delete Canvas 2" })).toHaveFocus();
+  });
+
   it("switches the active canvas", async () => {
     const user = userEvent.setup();
     renderList();

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Button } from "../../shared/components/Button";
+import { useDialogFocusTrap } from "../../shared/lib/useDialogFocusTrap";
 import { diffLines, type DiffLine } from "./diff";
 
 type ApplyDartDialogProps = {
@@ -23,6 +24,7 @@ export function ApplyDartDialog({
 }: ApplyDartDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const diff = useMemo(() => diffLines(existing ?? "", code), [existing, code]);
+  useDialogFocusTrap(dialogRef);
 
   useEffect(() => {
     dialogRef.current?.querySelector<HTMLButtonElement>(".dialog__cancel")?.focus();

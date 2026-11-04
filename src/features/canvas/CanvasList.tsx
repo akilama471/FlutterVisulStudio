@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "../../shared/components/Button";
 import { Icon } from "../../shared/components/Icon";
 import { IconButton } from "../../shared/components/IconButton";
+import { useDialogFocusTrap } from "../../shared/lib/useDialogFocusTrap";
 import {
   canvasNameError,
   MAX_CANVASES,
@@ -116,8 +117,10 @@ function RenameCanvasDialog({ canvas, onClose }: RenameCanvasDialogProps) {
   const { canvases, renameCanvas } = useDesignWorkspace();
   const [name, setName] = useState(canvas.name);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const error = canvasNameError(canvases, canvas.id, name);
   const unchanged = name.trim() === canvas.name;
+  useDialogFocusTrap(dialogRef);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -156,6 +159,7 @@ function RenameCanvasDialog({ canvas, onClose }: RenameCanvasDialogProps) {
       }}
     >
       <div
+        ref={dialogRef}
         className="dialog dialog--compact"
         role="dialog"
         aria-modal="true"
@@ -218,6 +222,7 @@ type DeleteCanvasDialogProps = {
 
 function DeleteCanvasDialog({ canvas, onCancel, onConfirm }: DeleteCanvasDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocusTrap(dialogRef);
 
   useEffect(() => {
     dialogRef.current?.querySelector<HTMLButtonElement>(".dialog__cancel")?.focus();
