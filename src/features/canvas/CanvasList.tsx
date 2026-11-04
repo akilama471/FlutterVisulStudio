@@ -11,6 +11,7 @@ import {
   type DesignCanvas,
 } from "./designSet";
 import { useDesignWorkspace } from "./designWorkspaceContext";
+import { DesignDataDialog } from "./DesignDataDialog";
 
 export function CanvasList() {
   const {
@@ -28,6 +29,7 @@ export function CanvasList() {
   } = useDesignWorkspace();
   const [pendingDelete, setPendingDelete] = useState<DesignCanvas | null>(null);
   const [pendingRename, setPendingRename] = useState<DesignCanvas | null>(null);
+  const [dataOpen, setDataOpen] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{
     id: string;
@@ -100,6 +102,12 @@ export function CanvasList() {
           Canvases
         </h2>
         <span className="canvas-list__count">{canvases.length}</span>
+        <IconButton
+          className="canvas-list__data"
+          label="Design data"
+          icon="database"
+          onClick={() => setDataOpen(true)}
+        />
         <IconButton
           className="canvas-list__add"
           label="New canvas"
@@ -199,6 +207,8 @@ export function CanvasList() {
           }}
         />
       ) : null}
+
+      {dataOpen ? <DesignDataDialog onClose={() => setDataOpen(false)} /> : null}
     </section>
   );
 }

@@ -10,6 +10,7 @@ import {
 } from "./canvasHistoryStorage";
 import {
   addCanvas,
+  createCanvasSet,
   duplicateCanvas as duplicateCanvasInSet,
   MAX_CANVASES,
   removeCanvas,
@@ -18,9 +19,11 @@ import {
   replaceCanvasRoot,
   restoreCanvas,
   selectCanvas,
+  type DesignCanvas,
   type DesignSet,
   type RemovedCanvas,
 } from "./designSet";
+import { addImportedCanvas as addImportedCanvasToSet, reidentifyDesignSet } from "./designTransfer";
 import {
   clearLegacyDesign,
   designSetBytes,
@@ -29,6 +32,17 @@ import {
   saveDesignSet,
   type DesignSaveStatus,
 } from "./designStorage";
+import {
+  loadDesignSnapshots,
+  recordDesignSnapshot,
+  type DesignSnapshot,
+  type SnapshotReason,
+} from "./designSnapshots";
+import {
+  clearProjectDesignStorage,
+  readDesignStorageUsage,
+  type DesignStorageUsage,
+} from "./designStorageUsage";
 import { DesignWorkspaceContext, type DesignWorkspace } from "./designWorkspaceContext";
 import {
   adoptWidgetIds,
@@ -77,13 +91,51 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
     bytes: designSetBytes(initial.set),
   }));
   const [clipboard, setClipboard] = useState<CanvasNode[]>([]);
+  const [revision, setRevision] = useState(0);
+  const [snapshots, setSnapshots] = useState<DesignSnapshot[]>(() =>
+    loadDesignSnapshots(project.path),
+  );
+  const [storageUsage, setStorageUsage] = useState<DesignStorageUsage>(() =>
+    readDesignStorageUsage(project.path),
+  );
   const stateRef = useRef(state);
   const historyRef = useRef(initialHistory);
+  const snapshotsRef = useRef(snapshots);
   const historyTimer = useRef<number | null>(null);
 
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  useEffect(() => {
+    snapshotsRef.current = snapshots;
+  }, [snapshots]);
+
+  const refreshStorageUsage = useCallback(() => {
+    setStorageUsage(readDesignStorageUsage(project.path));
+  }, [project.path]);
+
+  const captureSnapshot = useCallback(
+    (reason: SnapshotReason): boolean => {
+      const next = recordDesignSnapshot(
+        project.path,
+        snapshotsRef.current,
+        stateRef.current.set,
+        reason,
+        Date.now(),
+      );
+
+      if (!next) {
+        return false;
+      }
+
+      snapshotsRef.current = next;
+      setSnapshots(next);
+      refreshStorageUsage();
+      return true;
+    },
+    [project.path, refreshStorageUsage],
+  );
 
   const flushHistory = useCallback(() => {
     if (historyTimer.current !== null) {
@@ -117,6 +169,8 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
         if (stateRef.current.legacy) {
           clearLegacyDesign(project.path);
         }
+        captureSnapshot("auto");
+        refreshStorageUsage();
         setState((current) => ({
           ...current,
           dirty: false,
@@ -130,7 +184,7 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
     }, AUTOSAVE_DELAY);
 
     return () => window.clearTimeout(timer);
-  }, [project.path, state.dirty, state.set]);
+  }, [captureSnapshot, project.path, refreshStorageUsage, state.dirty, state.set]);
 
   useEffect(() => {
     function flush() {
@@ -350,6 +404,102 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
     [scheduleHistorySave],
   );
 
+  const replaceDesign = useCallback(
+    (set: DesignSet) => {
+      const prepared = reidentifyDesignSet(set);
+
+      historyRef.current.clear();
+      saveCanvasHistories(project.path, historyRef.current);
+
+      setState((current) => ({
+        ...current,
+        set: prepared,
+        dirty: true,
+        status: "saving",
+        legacy: false,
+        deleted: [],
+        bytes: designSetBytes(prepared),
+      }));
+      setRevision((current) => current + 1);
+      refreshStorageUsage();
+    },
+    [project.path, refreshStorageUsage],
+  );
+
+  const applyImportedDesign = useCallback(
+    (set: DesignSet): boolean => {
+      if (set.canvases.length === 0) {
+        return false;
+      }
+
+      captureSnapshot("before-import");
+      replaceDesign(set);
+      return true;
+    },
+    [captureSnapshot, replaceDesign],
+  );
+
+  const addImportedCanvas = useCallback(
+    (canvas: DesignCanvas): boolean => {
+      const nextSet = addImportedCanvasToSet(stateRef.current.set, canvas);
+
+      if (!nextSet) {
+        return false;
+      }
+
+      captureSnapshot("before-import");
+      setState((current) => ({
+        ...current,
+        set: nextSet,
+        dirty: true,
+        status: "saving",
+        legacy: false,
+        deleted: [],
+        bytes: designSetBytes(nextSet),
+      }));
+      setRevision((current) => current + 1);
+      refreshStorageUsage();
+      return true;
+    },
+    [captureSnapshot, refreshStorageUsage],
+  );
+
+  const restoreSnapshot = useCallback(
+    (id: string): boolean => {
+      const snapshot = snapshotsRef.current.find((entry) => entry.id === id);
+
+      if (!snapshot) {
+        return false;
+      }
+
+      captureSnapshot("before-restore");
+      replaceDesign(snapshot.set);
+      return true;
+    },
+    [captureSnapshot, replaceDesign],
+  );
+
+  const resetProjectDesign = useCallback((): boolean => {
+    captureSnapshot("before-reset");
+    clearProjectDesignStorage(project.path);
+    historyRef.current.clear();
+
+    const fresh = createCanvasSet();
+
+    setState((current) => ({
+      ...current,
+      set: fresh,
+      dirty: true,
+      status: "saving",
+      legacy: false,
+      deleted: [],
+      bytes: designSetBytes(fresh),
+    }));
+    setRevision((current) => current + 1);
+    refreshStorageUsage();
+    return true;
+  }, [captureSnapshot, project.path, refreshStorageUsage]);
+
   const activeCanvas =
     state.set.canvases.find((canvas) => canvas.id === state.set.activeId) ?? state.set.canvases[0];
 
@@ -358,12 +508,16 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
       canvases: state.set.canvases,
       activeCanvas,
       activeId: state.set.activeId,
+      projectName: project.name,
+      revision,
       saveStatus: state.status,
       canDeleteCanvas: state.set.canvases.length > 1,
       atCanvasLimit: state.set.canvases.length >= MAX_CANVASES,
       deletedCanvases: state.deleted,
       storageBytes: state.bytes,
       storageWarning: state.bytes >= MAX_DESIGN_BYTES_WARNING,
+      storageUsage,
+      snapshots,
       clipboard,
       createCanvas,
       duplicateCanvas,
@@ -377,9 +531,18 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
       copySelection,
       loadCanvasHistory,
       saveCanvasHistory,
+      captureSnapshot,
+      applyImportedDesign,
+      addImportedCanvas,
+      restoreSnapshot,
+      resetProjectDesign,
+      refreshStorageUsage,
     }),
     [
       activeCanvas,
+      addImportedCanvas,
+      applyImportedDesign,
+      captureSnapshot,
       clipboard,
       copySelection,
       createCanvas,
@@ -387,14 +550,21 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
       dismissDelete,
       duplicateCanvas,
       loadCanvasHistory,
+      project.name,
+      refreshStorageUsage,
       renameCanvas,
       reorderCanvas,
+      resetProjectDesign,
+      restoreSnapshot,
+      revision,
       saveCanvasHistory,
       selectCanvasInSet,
+      snapshots,
       state.deleted,
       state.set,
       state.status,
       state.bytes,
+      storageUsage,
       undoDelete,
       updateCanvasRoot,
     ],

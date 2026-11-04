@@ -7,6 +7,8 @@ export type IconName =
   | "code"
   | "column"
   | "copy"
+  | "database"
+  | "download"
   | "file"
   | "folder"
   | "grid"
@@ -23,6 +25,7 @@ export type IconName =
   | "text"
   | "trash"
   | "undo"
+  | "upload"
   | "x";
 
 const paths: Record<IconName, ReactNode> = {
@@ -57,6 +60,20 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <rect x="9" y="9" width="12" height="12" rx="2" />
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </>
+  ),
+  database: (
+    <>
+      <ellipse cx="12" cy="5" rx="8" ry="3" />
+      <path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" />
+      <path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M12 3v12" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M4 18h16" />
     </>
   ),
   file: (
@@ -161,6 +178,13 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <path d="M9 14 4 9l5-5" />
       <path d="M4 9h9a6 6 0 0 1 0 12H8" />
+    </>
+  ),
+  upload: (
+    <>
+      <path d="M12 21V9" />
+      <path d="m7 14 5-5 5 5" />
+      <path d="M4 6h16" />
     </>
   ),
   x: (

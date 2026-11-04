@@ -30,11 +30,11 @@ type DesignSurfaceProps = {
 };
 
 export function DesignSurface({ project, showInspector }: DesignSurfaceProps) {
-  const { activeCanvas, saveStatus, updateCanvasRoot } = useDesignWorkspace();
+  const { activeCanvas, revision, saveStatus, updateCanvasRoot } = useDesignWorkspace();
 
   return (
     <CanvasEditorSurface
-      key={activeCanvas.id}
+      key={`${activeCanvas.id}:${revision}`}
       project={project}
       canvas={activeCanvas}
       saveStatus={saveStatus}

@@ -13,6 +13,7 @@ const plannedCapabilities = [
   { icon: "undo", label: "Undo and redo" },
   { icon: "file", label: "Project file editing" },
   { icon: "layers", label: "Drag, drop, and multi-select" },
+  { icon: "database", label: "Portable design files" },
 ] as const;
 
 type EditorWelcomeProps = {
@@ -49,9 +50,9 @@ export function EditorWelcome({ status, onOpenProject }: EditorWelcomeProps) {
           </Button>
         </div>
         <p className="welcome__note">
-          Phase 9 completes the canvas editing model: drag widgets between containers, select and
-          edit several at once, copy and paste across canvases, and rely on undo history that
-          survives restarts. Open a project to start composing.
+          Phase 10 makes designs portable: export a project or one canvas to JSON, import it only
+          after a validated preview, restore from rotating snapshots, and keep an optional copy in
+          the project folder. Open a project to start composing.
         </p>
       </div>
     </section>
