@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addCanvas,
   adoptCanvasIds,
+  canvasNameError,
   createCanvasSet,
   createDesignCanvas,
   findCanvas,
@@ -11,6 +12,7 @@ import {
   MAX_CANVASES,
   nextCanvasName,
   removeCanvas,
+  renameCanvas,
   replaceCanvasRoot,
   selectCanvas,
   type DesignSet,
@@ -118,6 +120,26 @@ describe("design canvas sets", () => {
     expect(findCanvas(replaced, canvas.id)?.root).toBe(root);
     expect(replaceCanvasRoot(replaced, canvas.id, root)).toBe(replaced);
     expect(replaceCanvasRoot(set, "missing", root)).toBe(set);
+  });
+
+  it("renames a canvas with trimmed input and rejects invalid names", () => {
+    const set = addCanvas(createCanvasSet());
+    const first = set.canvases[0];
+
+    expect(canvasNameError(set.canvases, first.id, "  ")).toBe("empty");
+    expect(canvasNameError(set.canvases, first.id, "x".repeat(61))).toBe("too-long");
+    expect(canvasNameError(set.canvases, first.id, "canvas 2")).toBe("duplicate");
+    expect(canvasNameError(set.canvases, first.id, "Home")).toBeNull();
+
+    const renamed = renameCanvas(set, first.id, "  Home  ");
+    expect(findCanvas(renamed, first.id)?.name).toBe("Home");
+    expect(renamed.activeId).toBe(set.activeId);
+    expect(renameCanvas(set, first.id, "Canvas 1")).toBe(set);
+    expect(renameCanvas(set, first.id, "Home ")).not.toBe(set);
+    expect(findCanvas(renameCanvas(set, first.id, "Home "), first.id)?.name).toBe("Home");
+    expect(renameCanvas(set, "missing", "Home")).toBe(set);
+    expect(renameCanvas(set, first.id, "Canvas 2")).toBe(set);
+    expect(renameCanvas(set, first.id, "x".repeat(61))).toBe(set);
   });
 
   it("advances generated canvas IDs past adopted ones", () => {

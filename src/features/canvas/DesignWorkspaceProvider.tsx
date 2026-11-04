@@ -5,6 +5,7 @@ import {
   insertCanvas,
   MAX_CANVASES,
   removeCanvas,
+  renameCanvas as renameCanvasInSet,
   replaceCanvasRoot,
   selectCanvas,
   type DesignCanvas,
@@ -125,6 +126,18 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
     });
   }, []);
 
+  const renameCanvas = useCallback((id: string, name: string) => {
+    setState((current) => {
+      const set = renameCanvasInSet(current.set, id, name);
+
+      if (set === current.set) {
+        return current;
+      }
+
+      return { ...current, set, dirty: true, status: "saving" };
+    });
+  }, []);
+
   const deleteCanvas = useCallback((id: string) => {
     setState((current) => {
       const result = removeCanvas(current.set, id);
@@ -189,6 +202,7 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
       deletedCanvas: state.deleted?.canvas ?? null,
       createCanvas,
       selectCanvas: selectCanvasInSet,
+      renameCanvas,
       deleteCanvas,
       undoDelete,
       dismissDeleted,
@@ -199,6 +213,7 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
       createCanvas,
       deleteCanvas,
       dismissDeleted,
+      renameCanvas,
       selectCanvasInSet,
       state.deleted,
       state.set,

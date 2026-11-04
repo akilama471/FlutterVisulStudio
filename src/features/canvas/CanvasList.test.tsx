@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CanvasList } from "./CanvasList";
@@ -59,6 +59,53 @@ describe("CanvasList", () => {
       "aria-current",
       "true",
     );
+  });
+
+  it("renames a canvas and validates the new name", async () => {
+    const user = userEvent.setup();
+    renderList();
+
+    await user.click(screen.getByRole("button", { name: "New canvas" }));
+    await user.click(screen.getByRole("button", { name: "Rename Canvas 2" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Rename canvas" });
+    const input = within(dialog).getByLabelText("Canvas name");
+    expect(input).toHaveValue("Canvas 2");
+    expect(input).toHaveFocus();
+
+    await user.clear(input);
+    expect(within(dialog).getByText("Name is required.")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Save name" })).toBeDisabled();
+
+    await user.type(input, "Canvas 1");
+    expect(within(dialog).getByText("A canvas with this name already exists.")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Save name" })).toBeDisabled();
+
+    await user.clear(input);
+    await user.type(input, "  Settings  ");
+    await user.click(within(dialog).getByRole("button", { name: "Save name" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Settings" })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+    await waitFor(() => {
+      expect(loadDesignSet(PROJECT.path).set.canvases[1].name).toBe("Settings");
+    });
+  });
+
+  it("cancels a rename with Escape", async () => {
+    const user = userEvent.setup();
+    renderList();
+
+    await user.click(screen.getByRole("button", { name: "New canvas" }));
+    await user.click(screen.getByRole("button", { name: "Rename Canvas 2" }));
+    await user.type(screen.getByLabelText("Canvas name"), "Ignored");
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Canvas 2" })).toBeInTheDocument();
   });
 
   it("switches the active canvas", async () => {

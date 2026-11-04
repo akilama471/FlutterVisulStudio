@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "../../shared/components/Button";
 import { Icon } from "../../shared/components/Icon";
 import { IconButton } from "../../shared/components/IconButton";
-import { MAX_CANVASES, type DesignCanvas } from "./designSet";
+import {
+  canvasNameError,
+  MAX_CANVASES,
+  MAX_CANVAS_NAME_LENGTH,
+  type CanvasNameError,
+  type DesignCanvas,
+} from "./designSet";
 import { useDesignWorkspace } from "./designWorkspaceContext";
 
 export function CanvasList() {
@@ -16,6 +22,7 @@ export function CanvasList() {
     deleteCanvas,
   } = useDesignWorkspace();
   const [pendingDelete, setPendingDelete] = useState<DesignCanvas | null>(null);
+  const [pendingRename, setPendingRename] = useState<DesignCanvas | null>(null);
 
   return (
     <section className="canvas-list" aria-labelledby="canvas-list-title">
@@ -55,6 +62,12 @@ export function CanvasList() {
                 <span className="canvas-list__name">{canvas.name}</span>
               </button>
               <IconButton
+                className="canvas-list__rename"
+                label={`Rename ${canvas.name}`}
+                icon="pencil"
+                onClick={() => setPendingRename(canvas)}
+              />
+              <IconButton
                 className="canvas-list__delete"
                 label={`Delete ${canvas.name}`}
                 icon="trash"
@@ -70,6 +83,10 @@ export function CanvasList() {
         <p className="canvas-list__note">Limit of {MAX_CANVASES} canvases reached.</p>
       ) : null}
 
+      {pendingRename ? (
+        <RenameCanvasDialog canvas={pendingRename} onClose={() => setPendingRename(null)} />
+      ) : null}
+
       {pendingDelete ? (
         <DeleteCanvasDialog
           canvas={pendingDelete}
@@ -81,6 +98,115 @@ export function CanvasList() {
         />
       ) : null}
     </section>
+  );
+}
+
+type RenameCanvasDialogProps = {
+  canvas: DesignCanvas;
+  onClose: () => void;
+};
+
+const NAME_ERROR_LABELS: Record<CanvasNameError, string> = {
+  empty: "Name is required.",
+  "too-long": `Name must be ${MAX_CANVAS_NAME_LENGTH} characters or fewer.`,
+  duplicate: "A canvas with this name already exists.",
+};
+
+function RenameCanvasDialog({ canvas, onClose }: RenameCanvasDialogProps) {
+  const { canvases, renameCanvas } = useDesignWorkspace();
+  const [name, setName] = useState(canvas.name);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const error = canvasNameError(canvases, canvas.id, name);
+  const unchanged = name.trim() === canvas.name;
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  function submit() {
+    if (error || unchanged) {
+      return;
+    }
+
+    renameCanvas(canvas.id, name);
+    onClose();
+  }
+
+  return (
+    <div
+      className="dialog-backdrop"
+      role="presentation"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        className="dialog dialog--compact"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rename-canvas-title"
+      >
+        <header className="dialog__header">
+          <h2 id="rename-canvas-title" className="dialog__title">
+            Rename canvas
+          </h2>
+          <p className="dialog__description">
+            Choose a name for this canvas. Names are unique within the project.
+          </p>
+        </header>
+
+        <div className="dialog__body">
+          <label className="dialog__field" htmlFor="rename-canvas-input">
+            <span className="dialog__field-label">Canvas name</span>
+            <input
+              ref={inputRef}
+              id="rename-canvas-input"
+              className="dialog__input"
+              type="text"
+              value={name}
+              aria-invalid={error !== null}
+              aria-describedby={error ? "rename-canvas-error" : undefined}
+              onChange={(event) => setName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  submit();
+                }
+              }}
+            />
+          </label>
+          {error ? (
+            <p id="rename-canvas-error" className="dialog__error" role="alert">
+              {NAME_ERROR_LABELS[error]}
+            </p>
+          ) : null}
+        </div>
+
+        <footer className="dialog__actions">
+          <Button className="dialog__cancel" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" disabled={error !== null || unchanged} onClick={submit}>
+            Save name
+          </Button>
+        </footer>
+      </div>
+    </div>
   );
 }
 

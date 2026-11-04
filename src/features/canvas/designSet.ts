@@ -139,6 +139,53 @@ export function replaceCanvasRoot(set: DesignSet, id: string, root: CanvasNode):
   return { ...set, canvases };
 }
 
+export type CanvasNameError = "empty" | "too-long" | "duplicate";
+
+export function canvasNameError(
+  canvases: readonly DesignCanvas[],
+  id: string,
+  name: string,
+): CanvasNameError | null {
+  const trimmed = name.trim();
+
+  if (trimmed.length === 0) {
+    return "empty";
+  }
+
+  if (trimmed.length > MAX_CANVAS_NAME_LENGTH) {
+    return "too-long";
+  }
+
+  const duplicate = canvases.some(
+    (canvas) => canvas.id !== id && canvas.name.toLowerCase() === trimmed.toLowerCase(),
+  );
+
+  return duplicate ? "duplicate" : null;
+}
+
+export function renameCanvas(set: DesignSet, id: string, name: string): DesignSet {
+  const index = set.canvases.findIndex((canvas) => canvas.id === id);
+
+  if (index === -1) {
+    return set;
+  }
+
+  const trimmed = name.trim();
+
+  if (canvasNameError(set.canvases, id, trimmed) !== null) {
+    return set;
+  }
+
+  if (set.canvases[index].name === trimmed) {
+    return set;
+  }
+
+  const canvases = set.canvases.slice();
+  canvases[index] = { ...canvases[index], name: trimmed };
+
+  return { ...set, canvases };
+}
+
 export function isValidCanvasName(value: unknown): value is string {
   return (
     typeof value === "string" &&

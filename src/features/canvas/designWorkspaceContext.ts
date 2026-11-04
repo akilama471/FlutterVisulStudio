@@ -13,6 +13,7 @@ export type DesignWorkspace = {
   deletedCanvas: DesignCanvas | null;
   createCanvas: () => void;
   selectCanvas: (id: string) => void;
+  renameCanvas: (id: string, name: string) => void;
   deleteCanvas: (id: string) => void;
   undoDelete: () => void;
   dismissDeleted: () => void;

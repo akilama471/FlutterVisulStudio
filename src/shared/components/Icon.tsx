@@ -9,6 +9,7 @@ export type IconName =
   | "folder"
   | "grid"
   | "layers"
+  | "pencil"
   | "plus"
   | "redo"
   | "row"
@@ -66,6 +67,12 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <path d="M12 5v14" />
       <path d="M5 12h14" />
+    </>
+  ),
+  pencil: (
+    <>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z" />
     </>
   ),
   redo: (

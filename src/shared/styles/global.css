@@ -422,8 +422,16 @@ ul {
   opacity: 0;
 }
 
+.canvas-list__rename {
+  width: 24px;
+  height: 24px;
+  opacity: 0;
+}
+
 .canvas-list__item:hover .canvas-list__delete,
-.canvas-list__delete:focus-visible {
+.canvas-list__delete:focus-visible,
+.canvas-list__item:hover .canvas-list__rename,
+.canvas-list__rename:focus-visible {
   opacity: 1;
 }
 
@@ -1301,6 +1309,47 @@ ul {
   margin-top: 6px;
   color: var(--color-text-secondary);
   font-size: 12px;
+}
+
+.dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 20px 0;
+}
+
+.dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dialog__field-label {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dialog__input {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  outline: none;
+  background: var(--color-bg-editor);
+  color: var(--color-text);
+  font-size: 12.5px;
+}
+
+.dialog__input:focus {
+  border-color: var(--color-accent-strong);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+.dialog__input[aria-invalid="true"] {
+  border-color: rgba(235, 112, 112, 0.75);
 }
 
 .dialog__target {
