@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { Button } from "../../shared/components/Button";
 import { Icon } from "../../shared/components/Icon";
 import { IconButton } from "../../shared/components/IconButton";
@@ -21,12 +21,77 @@ export function CanvasList() {
     storageBytes,
     storageWarning,
     createCanvas,
+    duplicateCanvas,
+    reorderCanvas,
     selectCanvas,
     deleteCanvas,
   } = useDesignWorkspace();
   const [pendingDelete, setPendingDelete] = useState<DesignCanvas | null>(null);
   const [pendingRename, setPendingRename] = useState<DesignCanvas | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    id: string;
+    position: "before" | "after";
+  } | null>(null);
   const storageMegabytes = (storageBytes / (1024 * 1024)).toFixed(1);
+
+  function handleDragStart(canvas: DesignCanvas, event: DragEvent<HTMLLIElement>) {
+    event.stopPropagation();
+    setDragId(canvas.id);
+    setDropTarget(null);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", canvas.id);
+  }
+
+  function handleDragOver(canvas: DesignCanvas, event: DragEvent<HTMLLIElement>) {
+    if (!dragId || dragId === canvas.id) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "move";
+    const rect = event.currentTarget.getBoundingClientRect();
+    const ratio = rect.height > 0 ? (event.clientY - rect.top) / rect.height : 0.5;
+    const position = ratio < 0.5 ? "before" : "after";
+
+    setDropTarget((current) =>
+      current?.id === canvas.id && current.position === position
+        ? current
+        : { id: canvas.id, position },
+    );
+  }
+
+  function handleDragLeave(canvas: DesignCanvas, event: DragEvent<HTMLLIElement>) {
+    const related = event.relatedTarget;
+
+    if (related instanceof Node && event.currentTarget.contains(related)) {
+      return;
+    }
+
+    setDropTarget((current) => (current?.id === canvas.id ? null : current));
+  }
+
+  function handleDrop(canvas: DesignCanvas, event: DragEvent<HTMLLIElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!dragId) {
+      return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const position =
+      dropTarget?.id === canvas.id
+        ? dropTarget.position
+        : event.clientY < rect.top + rect.height / 2
+          ? "before"
+          : "after";
+
+    reorderCanvas(dragId, canvas.id, position);
+    setDragId(null);
+    setDropTarget(null);
+  }
 
   return (
     <section className="canvas-list" aria-labelledby="canvas-list-title">
@@ -51,10 +116,29 @@ export function CanvasList() {
           return (
             <li
               key={canvas.id}
-              className={
-                active ? "canvas-list__item canvas-list__item--active" : "canvas-list__item"
-              }
+              className={[
+                "canvas-list__item",
+                active ? "canvas-list__item--active" : "",
+                dragId === canvas.id ? "canvas-list__item--dragging" : "",
+                dropTarget?.id === canvas.id
+                  ? `canvas-list__item--drop-${dropTarget.position}`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              draggable={canvases.length > 1}
+              onDragStart={(event) => handleDragStart(canvas, event)}
+              onDragEnd={() => {
+                setDragId(null);
+                setDropTarget(null);
+              }}
+              onDragOver={(event) => handleDragOver(canvas, event)}
+              onDragLeave={(event) => handleDragLeave(canvas, event)}
+              onDrop={(event) => handleDrop(canvas, event)}
             >
+              <span className="canvas-list__grip" aria-hidden="true">
+                <Icon name="grip" size={12} />
+              </span>
               <button
                 type="button"
                 className="canvas-list__select"
@@ -65,6 +149,13 @@ export function CanvasList() {
                 <Icon name="file" size={13} />
                 <span className="canvas-list__name">{canvas.name}</span>
               </button>
+              <IconButton
+                className="canvas-list__duplicate"
+                label={`Duplicate ${canvas.name}`}
+                icon="copy"
+                disabled={atCanvasLimit}
+                onClick={() => duplicateCanvas(canvas.id)}
+              />
               <IconButton
                 className="canvas-list__rename"
                 label={`Rename ${canvas.name}`}

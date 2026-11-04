@@ -216,6 +216,10 @@ function parseLegacyDesign(raw: string): CanvasNode | null {
   return root;
 }
 
+export function parseDesignNode(value: unknown): CanvasNode | null {
+  return parseNode(value, 0, { count: 0, ids: new Set() });
+}
+
 function parseNode(value: unknown, depth: number, stats: ParseStats): CanvasNode | null {
   if (depth > MAX_DEPTH || !isRecord(value)) {
     return null;

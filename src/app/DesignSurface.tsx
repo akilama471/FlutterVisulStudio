@@ -6,7 +6,12 @@ import { CanvasWorkspace } from "../features/canvas/CanvasWorkspace";
 import type { DesignCanvas } from "../features/canvas/designSet";
 import type { DesignSaveStatus } from "../features/canvas/designStorage";
 import { useDesignWorkspace } from "../features/canvas/designWorkspaceContext";
-import { canvasReducer, type CanvasNode, type CanvasState } from "../features/canvas/model";
+import {
+  canvasReducer,
+  createCanvasState,
+  type CanvasNode,
+  type CanvasState,
+} from "../features/canvas/model";
 import { DartPreview } from "../features/dart/DartPreview";
 import { generateDart } from "../features/dart/generateDart";
 import { FileEditor } from "../features/files/FileEditor";
@@ -54,15 +59,13 @@ function CanvasEditorSurface({
   showInspector,
   onRootChange,
 }: CanvasEditorSurfaceProps) {
-  const [state, dispatch] = useReducer(canvasReducer, canvas.root, (root): CanvasState => ({
-    root,
-    selectedId: null,
-    past: [],
-    future: [],
-    coalesceKey: null,
-  }));
+  const { clipboard, copySelection, loadCanvasHistory, saveCanvasHistory } = useDesignWorkspace();
+  const [state, dispatch] = useReducer(canvasReducer, canvas.root, (root): CanvasState =>
+    createCanvasState(root, loadCanvasHistory(canvas.id, root)),
+  );
   const { activeTabId, activeFile, files, setActiveTab, requestCloseFile } = useFileWorkspace();
   const reportedRoot = useRef(canvas.root);
+  const stateRef = useRef(state);
   const code = useMemo(() => generateDart(state.root), [state.root]);
   const tabs = useMemo<EditorTab[]>(
     () => [
@@ -80,6 +83,10 @@ function CanvasEditorSurface({
   );
 
   useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  useEffect(() => {
     if (state.root === reportedRoot.current) {
       return;
     }
@@ -89,11 +96,24 @@ function CanvasEditorSurface({
   }, [canvas.id, onRootChange, state.root]);
 
   useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey) {
-        return;
-      }
+    saveCanvasHistory(canvas.id, state.root, {
+      past: state.past,
+      future: state.future,
+    });
+  }, [canvas.id, saveCanvasHistory, state.future, state.past, state.root]);
 
+  useEffect(() => {
+    return () => {
+      const current = stateRef.current;
+      saveCanvasHistory(canvas.id, current.root, {
+        past: current.past,
+        future: current.future,
+      });
+    };
+  }, [canvas.id, saveCanvasHistory]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
       if (document.querySelector('[role="dialog"]')) {
         return;
       }
@@ -109,6 +129,22 @@ function CanvasEditorSurface({
         return;
       }
 
+      const command = event.ctrlKey || event.metaKey;
+      const current = stateRef.current;
+      const canModify = current.selectedIds.some((id) => id !== current.root.id);
+
+      if (!command) {
+        if ((event.key === "Delete" || event.key === "Backspace") && !event.altKey && canModify) {
+          event.preventDefault();
+          dispatch({ type: "delete" });
+        }
+        return;
+      }
+
+      if (event.altKey) {
+        return;
+      }
+
       const key = event.key.toLowerCase();
 
       if (key === "z") {
@@ -117,12 +153,27 @@ function CanvasEditorSurface({
       } else if (key === "y") {
         event.preventDefault();
         dispatch({ type: "redo" });
+      } else if (key === "c") {
+        if (canModify) {
+          event.preventDefault();
+          copySelection(canvas.id, current.selectedIds);
+        }
+      } else if (key === "v") {
+        if (clipboard.length > 0) {
+          event.preventDefault();
+          dispatch({ type: "paste", nodes: clipboard });
+        }
+      } else if (key === "d") {
+        if (canModify) {
+          event.preventDefault();
+          dispatch({ type: "duplicate" });
+        }
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [canvas.id, clipboard, copySelection]);
 
   function selectView(id: string) {
     setActiveTab(id);
@@ -144,6 +195,10 @@ function CanvasEditorSurface({
             saveStatus={saveStatus}
             canUndo={state.past.length > 0}
             canRedo={state.future.length > 0}
+            canPaste={clipboard.length > 0}
+            onCopy={() => copySelection(canvas.id, state.selectedIds)}
+            onDuplicate={() => dispatch({ type: "duplicate" })}
+            onPaste={() => dispatch({ type: "paste", nodes: clipboard })}
           />
         )}
       </EditorArea>

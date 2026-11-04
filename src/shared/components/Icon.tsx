@@ -3,11 +3,14 @@ import type { ReactNode } from "react";
 export type IconName =
   | "button"
   | "chevron"
+  | "clipboard"
   | "code"
   | "column"
+  | "copy"
   | "file"
   | "folder"
   | "grid"
+  | "grip"
   | "layers"
   | "pencil"
   | "plus"
@@ -30,6 +33,14 @@ const paths: Record<IconName, ReactNode> = {
     </>
   ),
   chevron: <path d="m9 18 6-6-6-6" />,
+  clipboard: (
+    <>
+      <rect x="8" y="2" width="8" height="4" rx="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <path d="M8 11h8" />
+      <path d="M8 15h5" />
+    </>
+  ),
   code: (
     <>
       <path d="m8 6-5 6 5 6" />
@@ -40,6 +51,12 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <rect x="8" y="3" width="8" height="8" rx="1.5" />
       <rect x="8" y="13" width="8" height="8" rx="1.5" />
+    </>
+  ),
+  copy: (
+    <>
+      <rect x="9" y="9" width="12" height="12" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
     </>
   ),
   file: (
@@ -55,6 +72,16 @@ const paths: Record<IconName, ReactNode> = {
       <rect x="14" y="3" width="7" height="7" rx="1.5" />
       <rect x="3" y="14" width="7" height="7" rx="1.5" />
       <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </>
+  ),
+  grip: (
+    <>
+      <circle cx="9" cy="6" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="6" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="12" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="12" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="18" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="18" r="1.2" fill="currentColor" stroke="none" />
     </>
   ),
   layers: (

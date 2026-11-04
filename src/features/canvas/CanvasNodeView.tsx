@@ -1,10 +1,34 @@
-import type { CSSProperties, KeyboardEvent, MouseEvent } from "react";
-import { describeWidget, WIDGET_LABELS, type CanvasNode } from "./model";
+import type {
+  CSSProperties,
+  DragEvent,
+  FocusEvent,
+  KeyboardEvent,
+  MouseEvent,
+  ReactNode,
+} from "react";
+import { Icon } from "../../shared/components/Icon";
+import { describeWidget, WIDGET_LABELS, type CanvasDropTarget, type CanvasNode } from "./model";
+
+export type CanvasTreeContext = {
+  selectedIds: ReadonlySet<string>;
+  tabbableId: string | null;
+  collapsedIds: ReadonlySet<string>;
+  dragId: string | null;
+  dropTarget: CanvasDropTarget | null;
+  onSelect: (node: CanvasNode, event: MouseEvent<HTMLDivElement>) => void;
+  onKeyDown: (node: CanvasNode, event: KeyboardEvent<HTMLDivElement>) => void;
+  onFocusNode: (id: string) => void;
+  onToggleCollapse: (id: string) => void;
+  onDragStart: (node: CanvasNode, event: DragEvent<HTMLDivElement>) => void;
+  onDragEnd: () => void;
+  onDragOver: (node: CanvasNode, event: DragEvent<HTMLDivElement>) => void;
+  onDragLeave: (node: CanvasNode, event: DragEvent<HTMLDivElement>) => void;
+  onDrop: (node: CanvasNode, event: DragEvent<HTMLDivElement>) => void;
+};
 
 type CanvasNodeViewProps = {
   node: CanvasNode;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
+  context: CanvasTreeContext;
   depth?: number;
   index?: number;
   siblingCount?: number;
@@ -12,46 +36,50 @@ type CanvasNodeViewProps = {
 
 export function CanvasNodeView({
   node,
-  selectedId,
-  onSelect,
+  context,
   depth = 0,
   index = 0,
   siblingCount = 1,
 }: CanvasNodeViewProps) {
-  const selected = node.id === selectedId;
+  const selected = context.selectedIds.has(node.id);
+  const collapsed = context.collapsedIds.has(node.id);
+  const hasChildren = node.children.length > 0;
+  const drop = context.dropTarget?.id === node.id ? context.dropTarget.position : null;
   const classes = [
     "canvas-node",
     `canvas-node--${node.kind}`,
     selected ? "canvas-node--selected" : "",
+    context.dragId === node.id ? "canvas-node--dragging" : "",
+    drop ? `canvas-node--drop-${drop}` : "",
   ]
     .filter(Boolean)
     .join(" ");
 
-  function handleClick(event: MouseEvent<HTMLDivElement>) {
-    event.stopPropagation();
-    onSelect(node.id);
-  }
-
-  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      event.stopPropagation();
-      onSelect(node.id);
-    }
-  }
-
   const commonProps = {
     role: "treeitem" as const,
-    tabIndex: 0,
+    tabIndex: context.tabbableId === node.id ? 0 : -1,
     "aria-label": describeWidget(node),
     "aria-selected": selected,
     "aria-level": depth + 1,
     "aria-posinset": index + 1,
     "aria-setsize": siblingCount,
+    "aria-expanded": hasChildren ? !collapsed : undefined,
     "data-kind": WIDGET_LABELS[node.kind],
+    "data-node-id": node.id,
     className: classes,
-    onClick: handleClick,
-    onKeyDown: handleKeyDown,
+    draggable: node.kind !== "screen",
+    onClick: (event: MouseEvent<HTMLDivElement>) => context.onSelect(node, event),
+    onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => context.onKeyDown(node, event),
+    onFocus: (event: FocusEvent<HTMLDivElement>) => {
+      if (event.target === event.currentTarget) {
+        context.onFocusNode(node.id);
+      }
+    },
+    onDragStart: (event: DragEvent<HTMLDivElement>) => context.onDragStart(node, event),
+    onDragEnd: context.onDragEnd,
+    onDragOver: (event: DragEvent<HTMLDivElement>) => context.onDragOver(node, event),
+    onDragLeave: (event: DragEvent<HTMLDivElement>) => context.onDragLeave(node, event),
+    onDrop: (event: DragEvent<HTMLDivElement>) => context.onDrop(node, event),
   };
 
   if (node.kind === "text") {
@@ -63,20 +91,40 @@ export function CanvasNodeView({
   }
 
   const style = layoutStyle(node);
-  const children = node.children.map((child, childIndex) => (
-    <CanvasNodeView
-      key={child.id}
-      node={child}
-      selectedId={selectedId}
-      onSelect={onSelect}
-      depth={depth + 1}
-      index={childIndex}
-      siblingCount={node.children.length}
-    />
-  ));
+  const children: ReactNode =
+    hasChildren && !collapsed ? (
+      <div role="group" className="canvas-node__children">
+        {node.children.map((child, childIndex) => (
+          <CanvasNodeView
+            key={child.id}
+            node={child}
+            context={context}
+            depth={depth + 1}
+            index={childIndex}
+            siblingCount={node.children.length}
+          />
+        ))}
+      </div>
+    ) : null;
 
   return (
     <div {...commonProps} style={style}>
+      {hasChildren ? (
+        <button
+          type="button"
+          className={
+            collapsed ? "canvas-node__toggle canvas-node__toggle--collapsed" : "canvas-node__toggle"
+          }
+          aria-label={`${collapsed ? "Expand" : "Collapse"} ${WIDGET_LABELS[node.kind]}`}
+          tabIndex={-1}
+          onClick={(event) => {
+            event.stopPropagation();
+            context.onToggleCollapse(node.id);
+          }}
+        >
+          <Icon name="chevron" size={11} />
+        </button>
+      ) : null}
       {node.children.length === 0 ? (
         <span className="canvas-empty">{emptyMessage(node.kind)}</span>
       ) : null}

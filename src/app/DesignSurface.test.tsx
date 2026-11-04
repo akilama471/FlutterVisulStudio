@@ -1,6 +1,7 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { canvasHistoryStorageKey } from "../features/canvas/canvasHistoryStorage";
 import { CanvasList } from "../features/canvas/CanvasList";
 import {
   createCanvasSet,
@@ -70,6 +71,57 @@ function designWithText(content: string): CanvasNode {
   column.children = [createWidget("text", { content })];
   screen.children = [column];
   return screen;
+}
+
+function designWithTexts(...contents: string[]): CanvasNode {
+  const screen = createWidget("screen");
+  const column = createWidget("column");
+  column.children = contents.map((content) => createWidget("text", { content }));
+  screen.children = [column];
+  return screen;
+}
+
+function fakeDataTransfer(): DataTransfer {
+  const data = new Map<string, string>();
+
+  return {
+    dropEffect: "none",
+    effectAllowed: "uninitialized",
+    files: [] as unknown as FileList,
+    items: [] as unknown as DataTransferItemList,
+    types: [],
+    clearData: () => undefined,
+    getData: (format: string) => data.get(format) ?? "",
+    setData: (format: string, value: string) => {
+      data.set(format, value);
+    },
+    setDragImage: () => undefined,
+  } as DataTransfer;
+}
+
+function mockRect(element: Element): void {
+  vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 320,
+    bottom: 100,
+    width: 320,
+    height: 100,
+    toJSON: () => ({}),
+  });
+}
+
+function fireDrag(
+  type: "dragover" | "drop",
+  element: Element,
+  clientY: number,
+  dataTransfer: DataTransfer,
+): void {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientY });
+  Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+  fireEvent(element, event);
 }
 
 function seedDesign(root: CanvasNode) {
@@ -537,5 +589,266 @@ describe("DesignSurface", () => {
 
     await waitFor(() => expect(loadedCanvasText("Canvas 1")).toBe("Edited first"));
     expect(loadedCanvasText("Canvas 2")).toBe("Second canvas");
+  });
+
+  it("selects multiple widgets with Ctrl and Shift and deletes the group", async () => {
+    const user = userEvent.setup();
+    renderSurface();
+
+    const text = screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' });
+    const button = screen.getByRole("treeitem", { name: 'Button "Get started"' });
+
+    await user.click(text);
+    await user.keyboard("{Control>}");
+    await user.click(button);
+    await user.keyboard("{/Control}");
+
+    expect(text).toHaveAttribute("aria-selected", "true");
+    expect(button).toHaveAttribute("aria-selected", "true");
+    expect(
+      screen.getByText("2 widgets selected", { selector: ".canvas-header__selection" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Delete widget" }));
+
+    expect(
+      screen.queryByRole("treeitem", { name: 'Text "Hello, Flutter!"' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("treeitem", { name: 'Button "Get started"' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("treeitem", { name: "Column" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    expect(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("treeitem", { name: 'Button "Get started"' })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  it("extends the selection with Shift+click over visible order", async () => {
+    const user = userEvent.setup();
+    renderSurface();
+
+    const text = screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' });
+    const button = screen.getByRole("treeitem", { name: 'Button "Get started"' });
+
+    await user.click(text);
+    await user.keyboard("{Shift>}");
+    await user.click(button);
+    await user.keyboard("{/Shift}");
+
+    expect(text).toHaveAttribute("aria-selected", "true");
+    expect(button).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("shows shared fields for same-kind selections and a note for mixed kinds", async () => {
+    const user = userEvent.setup();
+    seedDesign(designWithTexts("Alpha", "Beta"));
+    renderSurface();
+
+    await user.click(screen.getByRole("treeitem", { name: 'Text "Alpha"' }));
+    await user.keyboard("{Control>}");
+    await user.click(screen.getByRole("treeitem", { name: 'Text "Beta"' }));
+    await user.keyboard("{/Control}");
+
+    const content = screen.getByLabelText("Content");
+    expect(content).toHaveValue("");
+    expect(content).toHaveAttribute("placeholder", "Mixed values");
+
+    await user.type(content, "Shared");
+    expect(screen.getAllByRole("treeitem", { name: 'Text "Shared"' })).toHaveLength(2);
+
+    await user.click(screen.getByRole("button", { name: "Add Button" }));
+    await user.keyboard("{Control>}");
+    await user.click(screen.getAllByRole("treeitem", { name: 'Text "Shared"' })[0]);
+    await user.keyboard("{/Control}");
+
+    expect(
+      screen.getByText("Select widgets of the same type to edit shared properties."),
+    ).toBeInTheDocument();
+  });
+
+  it("duplicates the selected subtree", async () => {
+    const user = userEvent.setup();
+    renderSurface();
+
+    await user.click(screen.getByRole("button", { name: "Add Text" }));
+    await user.click(screen.getByRole("button", { name: "Duplicate selection" }));
+
+    expect(screen.getAllByRole("treeitem", { name: 'Text "Text"' })).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    expect(screen.getAllByRole("treeitem", { name: 'Text "Text"' })).toHaveLength(1);
+  });
+
+  it("copies and pastes between canvases", async () => {
+    const user = userEvent.setup();
+    seedTwoCanvases();
+    renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: "Canvas 1" }));
+    await user.click(screen.getByRole("treeitem", { name: 'Text "First canvas"' }));
+    await user.click(screen.getByRole("button", { name: "Copy selection" }));
+
+    await user.click(screen.getByRole("button", { name: "Canvas 2" }));
+    expect(screen.getByRole("button", { name: "Paste" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Paste" }));
+
+    expect(screen.getByRole("treeitem", { name: 'Text "First canvas"' })).toBeInTheDocument();
+    expect(screen.getByRole("treeitem", { name: 'Text "Second canvas"' })).toBeInTheDocument();
+  });
+
+  it("copies and pastes with keyboard shortcuts", async () => {
+    const user = userEvent.setup();
+    renderSurface();
+
+    await user.click(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' }));
+    await user.keyboard("{Control>}c{/Control}");
+    await user.keyboard("{Control>}v{/Control}");
+
+    expect(screen.getAllByRole("treeitem", { name: 'Text "Hello, Flutter!"' })).toHaveLength(2);
+
+    await user.keyboard("{Control>}d{/Control}");
+    expect(screen.getAllByRole("treeitem", { name: 'Text "Hello, Flutter!"' })).toHaveLength(3);
+  });
+
+  it("navigates, selects, expands, and reorders with the tree keyboard model", async () => {
+    const user = userEvent.setup();
+    renderSurface();
+
+    const root = screen.getByRole("treeitem", { name: "Screen" });
+    const column = screen.getByRole("treeitem", { name: "Column" });
+    const text = screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' });
+    const button = screen.getByRole("treeitem", { name: 'Button "Get started"' });
+
+    root.focus();
+    expect(root).toHaveAttribute("tabindex", "0");
+
+    await user.keyboard("{ArrowDown}");
+    expect(column).toHaveFocus();
+    expect(column).toHaveAttribute("aria-selected", "true");
+    expect(column).toHaveAttribute("tabindex", "0");
+    expect(root).toHaveAttribute("tabindex", "-1");
+
+    await user.keyboard("{ArrowRight}");
+    expect(text).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    expect(button).toHaveFocus();
+
+    await user.keyboard("{Home}");
+    expect(root).toHaveFocus();
+    await user.keyboard("{End}");
+    expect(button).toHaveFocus();
+
+    await user.keyboard("{Control>}{ArrowUp}{/Control}");
+    expect(button).toHaveAttribute("aria-posinset", "1");
+    expect(text).toHaveAttribute("aria-posinset", "2");
+
+    await user.click(column);
+    await user.keyboard("{ArrowLeft}");
+    expect(column).toHaveAttribute("aria-expanded", "false");
+    expect(
+      screen.queryByRole("treeitem", { name: 'Text "Hello, Flutter!"' }),
+    ).not.toBeInTheDocument();
+
+    await user.keyboard("{ArrowRight}");
+    expect(column).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' })).toBeInTheDocument();
+  });
+
+  it("extends a keyboard selection with Shift+Arrow", async () => {
+    const user = userEvent.setup();
+    renderSurface();
+
+    await user.click(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' }));
+    await user.keyboard("{Shift>}{ArrowDown}{/Shift}");
+
+    expect(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("treeitem", { name: 'Button "Get started"' })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  it("reorders widgets by dragging before a target", async () => {
+    const user = userEvent.setup();
+    renderSurface();
+
+    const text = screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' });
+    const button = screen.getByRole("treeitem", { name: 'Button "Get started"' });
+    const dataTransfer = fakeDataTransfer();
+
+    mockRect(text);
+    fireEvent.dragStart(button, { dataTransfer });
+    fireDrag("dragover", text, 5, dataTransfer);
+    fireDrag("drop", text, 5, dataTransfer);
+
+    expect(button).toHaveAttribute("aria-posinset", "1");
+    expect(text).toHaveAttribute("aria-posinset", "2");
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    expect(text).toHaveAttribute("aria-posinset", "1");
+  });
+
+  it("moves a widget into another container by dragging", async () => {
+    const user = userEvent.setup();
+    renderSurface();
+
+    await user.click(screen.getByRole("button", { name: "Add Container" }));
+    const container = screen.getByRole("treeitem", { name: "Container" });
+    const text = screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' });
+    const dataTransfer = fakeDataTransfer();
+
+    mockRect(container);
+    fireEvent.dragStart(text, { dataTransfer });
+    fireDrag("dragover", container, 50, dataTransfer);
+    fireDrag("drop", container, 50, dataTransfer);
+
+    expect(
+      within(container).getByRole("treeitem", { name: 'Text "Hello, Flutter!"' }),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("treeitem", { name: "Column" })).queryByRole("treeitem", {
+        name: 'Text "Hello, Flutter!"',
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("restores per-canvas undo history after a restart", async () => {
+    const user = userEvent.setup();
+    const first = renderSurface();
+
+    await user.click(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' }));
+    const content = screen.getByLabelText("Content");
+    await user.clear(content);
+    await user.type(content, "History survives");
+
+    await waitFor(() => expect(firstTextContent(PROJECT.path)).toBe("History survives"));
+    await waitFor(() =>
+      expect(window.localStorage.getItem(canvasHistoryStorageKey(PROJECT.path))).not.toBeNull(),
+    );
+    expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
+
+    first.unmount();
+    renderSurface();
+
+    expect(screen.getByRole("treeitem", { name: 'Text "History survives"' })).toBeInTheDocument();
+    const undo = screen.getByRole("button", { name: "Undo" });
+    expect(undo).toBeEnabled();
+
+    await user.click(undo);
+    expect(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' })).toBeInTheDocument();
   });
 });

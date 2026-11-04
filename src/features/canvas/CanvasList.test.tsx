@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CanvasList } from "./CanvasList";
@@ -14,6 +14,57 @@ const PROJECT = {
   path: "C:\\Projects\\demo_app",
   entryPoint: "lib/main.dart",
 };
+
+function fakeDataTransfer(): DataTransfer {
+  const data = new Map<string, string>();
+
+  return {
+    dropEffect: "none",
+    effectAllowed: "uninitialized",
+    files: [] as unknown as FileList,
+    items: [] as unknown as DataTransferItemList,
+    types: [],
+    clearData: () => undefined,
+    getData: (format: string) => data.get(format) ?? "",
+    setData: (format: string, value: string) => {
+      data.set(format, value);
+    },
+    setDragImage: () => undefined,
+  } as DataTransfer;
+}
+
+function mockRowRect(row: Element): void {
+  vi.spyOn(row, "getBoundingClientRect").mockReturnValue({
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 300,
+    bottom: 28,
+    width: 300,
+    height: 28,
+    toJSON: () => ({}),
+  });
+}
+
+function fireDrag(
+  type: "dragover" | "drop",
+  element: Element,
+  clientY: number,
+  dataTransfer: DataTransfer,
+): void {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientY });
+  Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+  fireEvent(element, event);
+}
+
+function rowFor(name: string): HTMLLIElement {
+  const row = screen.getByRole("button", { name }).closest("li");
+  if (!row) {
+    throw new Error(`Missing canvas row for ${name}`);
+  }
+  return row as HTMLLIElement;
+}
 
 function ActiveCanvasProbe() {
   const { activeCanvas, canvases } = useDesignWorkspace();
@@ -267,5 +318,50 @@ describe("CanvasList", () => {
     renderList();
 
     expect(screen.getByRole("button", { name: "Delete Canvas 1" })).toBeDisabled();
+  });
+
+  it("duplicates a canvas with a copy name and fresh widget ids", async () => {
+    const user = userEvent.setup();
+    const seeded = createCanvasSet();
+    expect(saveDesignSet(PROJECT.path, seeded)).toBe(true);
+
+    renderList();
+    await user.click(screen.getByRole("button", { name: "Duplicate Canvas 1" }));
+
+    expect(screen.getByTestId("canvas-count")).toHaveTextContent("2");
+    expect(screen.getByTestId("active-canvas")).toHaveTextContent("Canvas 1 copy");
+    expect(screen.getByRole("button", { name: "Canvas 1 copy" })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+
+    await waitFor(() => {
+      const canvases = loadDesignSet(PROJECT.path).set.canvases;
+      expect(canvases.map((canvas) => canvas.name)).toEqual(["Canvas 1", "Canvas 1 copy"]);
+      expect(canvases[1].root.id).not.toBe(canvases[0].root.id);
+      expect(canvases[1].root.children[0].id).not.toBe(canvases[0].root.children[0].id);
+    });
+  });
+
+  it("reorders canvases by dragging a row before another", async () => {
+    const user = userEvent.setup();
+    renderList();
+
+    await user.click(screen.getByRole("button", { name: "New canvas" }));
+
+    const first = rowFor("Canvas 1");
+    const second = rowFor("Canvas 2");
+    const dataTransfer = fakeDataTransfer();
+
+    mockRowRect(first);
+    fireEvent.dragStart(second, { dataTransfer });
+    fireDrag("dragover", first, 5, dataTransfer);
+    fireDrag("drop", first, 5, dataTransfer);
+
+    await waitFor(() => {
+      const names = loadDesignSet(PROJECT.path).set.canvases.map((canvas) => canvas.name);
+      expect(names).toEqual(["Canvas 2", "Canvas 1"]);
+    });
+    expect(screen.getByTestId("active-canvas")).toHaveTextContent("Canvas 2");
   });
 });

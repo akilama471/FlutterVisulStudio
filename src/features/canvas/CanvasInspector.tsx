@@ -3,9 +3,12 @@ import { EmptyState } from "../../shared/components/EmptyState";
 import {
   findNode,
   findNodePath,
+  topLevelSelection,
   WIDGET_LABELS,
   type CanvasAction,
+  type CanvasNode,
   type CanvasState,
+  type WidgetKind,
   type WidgetProps,
 } from "./model";
 
@@ -25,9 +28,11 @@ export function NoProjectInspector() {
 }
 
 export function CanvasInspector({ canvas, dispatch }: CanvasInspectorProps) {
-  const selected = findNode(canvas.root, canvas.selectedId);
+  const selected = canvas.selectedIds
+    .map((id) => findNode(canvas.root, id))
+    .filter((node): node is CanvasNode => node !== null);
 
-  if (!selected) {
+  if (selected.length === 0) {
     return (
       <EmptyState
         icon="sliders"
@@ -37,6 +42,23 @@ export function CanvasInspector({ canvas, dispatch }: CanvasInspectorProps) {
     );
   }
 
+  if (selected.length === 1) {
+    return <SingleSelection canvas={canvas} dispatch={dispatch} selected={selected[0]} />;
+  }
+
+  return <MultiSelection canvas={canvas} dispatch={dispatch} selected={selected} />;
+}
+
+type SelectionProps = {
+  canvas: CanvasState;
+  dispatch: Dispatch<CanvasAction>;
+};
+
+function SingleSelection({
+  canvas,
+  dispatch,
+  selected,
+}: SelectionProps & { selected: CanvasNode }) {
   const path = findNodePath(canvas.root, selected.id);
   const typeLabel = WIDGET_LABELS[selected.kind];
 
@@ -81,80 +103,7 @@ export function CanvasInspector({ canvas, dispatch }: CanvasInspectorProps) {
         <code className="inspector-summary__id">{selected.id}</code>
       </div>
 
-      <div className="inspector-fields">
-        {selected.kind === "text" ? (
-          <label className="inspector-field" htmlFor="inspector-text-content">
-            <span className="inspector-field__label">Content</span>
-            <input
-              id="inspector-text-content"
-              className="inspector-input"
-              type="text"
-              value={selected.props.content}
-              onChange={(event) => update({ content: event.target.value })}
-            />
-          </label>
-        ) : null}
-
-        {selected.kind === "button" ? (
-          <label className="inspector-field" htmlFor="inspector-button-label">
-            <span className="inspector-field__label">Label</span>
-            <input
-              id="inspector-button-label"
-              className="inspector-input"
-              type="text"
-              value={selected.props.label}
-              onChange={(event) => update({ label: event.target.value })}
-            />
-          </label>
-        ) : null}
-
-        {selected.kind === "row" || selected.kind === "column" ? (
-          <label className="inspector-field" htmlFor="inspector-gap">
-            <span className="inspector-field__label">Gap</span>
-            <input
-              id="inspector-gap"
-              className="inspector-input inspector-input--number"
-              type="number"
-              min={0}
-              max={64}
-              value={selected.props.gap}
-              onChange={(event) => update({ gap: clampNumber(event.target.value, 0, 64) })}
-            />
-          </label>
-        ) : null}
-
-        {selected.kind === "container" ? (
-          <>
-            <label className="inspector-field" htmlFor="inspector-padding">
-              <span className="inspector-field__label">Padding</span>
-              <input
-                id="inspector-padding"
-                className="inspector-input inspector-input--number"
-                type="number"
-                min={0}
-                max={96}
-                value={selected.props.padding}
-                onChange={(event) => update({ padding: clampNumber(event.target.value, 0, 96) })}
-              />
-            </label>
-            <ColorField
-              id="inspector-container-background"
-              label="Background"
-              value={selected.props.background}
-              onChange={(background) => update({ background })}
-            />
-          </>
-        ) : null}
-
-        {selected.kind === "screen" ? (
-          <ColorField
-            id="inspector-screen-background"
-            label="Background"
-            value={selected.props.background}
-            onChange={(background) => update({ background })}
-          />
-        ) : null}
-      </div>
+      <div className="inspector-fields">{renderFields(selected.kind, selected.props, update)}</div>
 
       {selected.kind === "screen" ? (
         <p className="inspector-note">
@@ -172,14 +121,260 @@ export function CanvasInspector({ canvas, dispatch }: CanvasInspectorProps) {
   );
 }
 
+function MultiSelection({
+  canvas,
+  dispatch,
+  selected,
+}: SelectionProps & { selected: CanvasNode[] }) {
+  const kinds = [...new Set(selected.map((node) => node.kind))];
+  const sharedKind = kinds.length === 1 ? kinds[0] : null;
+  const removed = topLevelSelection(
+    canvas.root,
+    selected.map((node) => node.id),
+  );
+  const descendantCount = removed.reduce((count, id) => {
+    const node = findNode(canvas.root, id);
+    return count + (node ? countDescendants(node) : 0);
+  }, 0);
+
+  function update(patch: Partial<WidgetProps>) {
+    dispatch({ type: "update", patch });
+  }
+
+  return (
+    <div className="inspector-content">
+      <div className="inspector-summary">
+        <span className="inspector-summary__type">{selected.length} widgets selected</span>
+        <code className="inspector-summary__id">
+          {kinds.map((kind) => WIDGET_LABELS[kind]).join(", ")}
+        </code>
+      </div>
+
+      {sharedKind ? (
+        <div className="inspector-fields">{renderMultiFields(sharedKind, selected, update)}</div>
+      ) : (
+        <p className="inspector-note">Select widgets of the same type to edit shared properties.</p>
+      )}
+
+      <p className="inspector-note">
+        Group changes apply to every selected widget.
+        {descendantCount > 0
+          ? ` Deleting the selection also removes ${descendantCount} nested ${
+              descendantCount === 1 ? "widget" : "widgets"
+            }.`
+          : ""}
+      </p>
+    </div>
+  );
+}
+
+function renderFields(
+  kind: WidgetKind,
+  props: WidgetProps,
+  update: (patch: Partial<WidgetProps>) => void,
+) {
+  switch (kind) {
+    case "text":
+      return (
+        <label className="inspector-field" htmlFor="inspector-text-content">
+          <span className="inspector-field__label">Content</span>
+          <input
+            id="inspector-text-content"
+            className="inspector-input"
+            type="text"
+            value={props.content}
+            onChange={(event) => update({ content: event.target.value })}
+          />
+        </label>
+      );
+    case "button":
+      return (
+        <label className="inspector-field" htmlFor="inspector-button-label">
+          <span className="inspector-field__label">Label</span>
+          <input
+            id="inspector-button-label"
+            className="inspector-input"
+            type="text"
+            value={props.label}
+            onChange={(event) => update({ label: event.target.value })}
+          />
+        </label>
+      );
+    case "row":
+    case "column":
+      return (
+        <label className="inspector-field" htmlFor="inspector-gap">
+          <span className="inspector-field__label">Gap</span>
+          <input
+            id="inspector-gap"
+            className="inspector-input inspector-input--number"
+            type="number"
+            min={0}
+            max={64}
+            value={props.gap}
+            onChange={(event) => update({ gap: clampNumber(event.target.value, 0, 64) })}
+          />
+        </label>
+      );
+    case "container":
+      return (
+        <>
+          <label className="inspector-field" htmlFor="inspector-padding">
+            <span className="inspector-field__label">Padding</span>
+            <input
+              id="inspector-padding"
+              className="inspector-input inspector-input--number"
+              type="number"
+              min={0}
+              max={96}
+              value={props.padding}
+              onChange={(event) => update({ padding: clampNumber(event.target.value, 0, 96) })}
+            />
+          </label>
+          <ColorField
+            id="inspector-container-background"
+            label="Background"
+            value={props.background}
+            onChange={(background) => update({ background })}
+          />
+        </>
+      );
+    case "screen":
+      return (
+        <ColorField
+          id="inspector-screen-background"
+          label="Background"
+          value={props.background}
+          onChange={(background) => update({ background })}
+        />
+      );
+  }
+}
+
+function renderMultiFields(
+  kind: WidgetKind,
+  selected: CanvasNode[],
+  update: (patch: Partial<WidgetProps>) => void,
+) {
+  switch (kind) {
+    case "text": {
+      const field = sharedValue(selected, "content");
+      return (
+        <label className="inspector-field" htmlFor="inspector-text-content">
+          <span className="inspector-field__label">Content</span>
+          <input
+            id="inspector-text-content"
+            className="inspector-input"
+            type="text"
+            value={field.mixed ? "" : field.value}
+            placeholder={field.mixed ? "Mixed values" : undefined}
+            onChange={(event) => update({ content: event.target.value })}
+          />
+        </label>
+      );
+    }
+    case "button": {
+      const field = sharedValue(selected, "label");
+      return (
+        <label className="inspector-field" htmlFor="inspector-button-label">
+          <span className="inspector-field__label">Label</span>
+          <input
+            id="inspector-button-label"
+            className="inspector-input"
+            type="text"
+            value={field.mixed ? "" : field.value}
+            placeholder={field.mixed ? "Mixed values" : undefined}
+            onChange={(event) => update({ label: event.target.value })}
+          />
+        </label>
+      );
+    }
+    case "row":
+    case "column": {
+      const field = sharedValue(selected, "gap");
+      return (
+        <label className="inspector-field" htmlFor="inspector-gap">
+          <span className="inspector-field__label">Gap</span>
+          <input
+            id="inspector-gap"
+            className="inspector-input inspector-input--number"
+            type="number"
+            min={0}
+            max={64}
+            value={field.mixed ? "" : field.value}
+            placeholder={field.mixed ? "Mixed" : undefined}
+            onChange={(event) => update({ gap: clampNumber(event.target.value, 0, 64) })}
+          />
+        </label>
+      );
+    }
+    case "container": {
+      const padding = sharedValue(selected, "padding");
+      const background = sharedValue(selected, "background");
+      return (
+        <>
+          <label className="inspector-field" htmlFor="inspector-padding">
+            <span className="inspector-field__label">Padding</span>
+            <input
+              id="inspector-padding"
+              className="inspector-input inspector-input--number"
+              type="number"
+              min={0}
+              max={96}
+              value={padding.mixed ? "" : padding.value}
+              placeholder={padding.mixed ? "Mixed" : undefined}
+              onChange={(event) => update({ padding: clampNumber(event.target.value, 0, 96) })}
+            />
+          </label>
+          <ColorField
+            id="inspector-container-background"
+            label="Background"
+            value={background.mixed ? "" : background.value}
+            placeholder={background.mixed ? "Mixed values" : undefined}
+            onChange={(next) => update({ background: next })}
+          />
+        </>
+      );
+    }
+    case "screen": {
+      const background = sharedValue(selected, "background");
+      return (
+        <ColorField
+          id="inspector-screen-background"
+          label="Background"
+          value={background.mixed ? "" : background.value}
+          placeholder={background.mixed ? "Mixed values" : undefined}
+          onChange={(next) => update({ background: next })}
+        />
+      );
+    }
+  }
+}
+
+function sharedValue<K extends keyof WidgetProps>(
+  selected: CanvasNode[],
+  prop: K,
+): { value: WidgetProps[K]; mixed: boolean } {
+  const value = selected[0].props[prop];
+  return {
+    value,
+    mixed: selected.some((node) => node.props[prop] !== value),
+  };
+}
+
+function countDescendants(node: CanvasNode): number {
+  return node.children.reduce((count, child) => count + 1 + countDescendants(child), 0);
+}
+
 type ColorFieldProps = {
   id: string;
   label: string;
   value: string;
+  placeholder?: string;
   onChange: (value: string) => void;
 };
 
-function ColorField({ id, label, value, onChange }: ColorFieldProps) {
+function ColorField({ id, label, value, placeholder, onChange }: ColorFieldProps) {
   return (
     <label className="inspector-field" htmlFor={id}>
       <span className="inspector-field__label">{label}</span>
@@ -195,6 +390,7 @@ function ColorField({ id, label, value, onChange }: ColorFieldProps) {
           type="text"
           spellCheck={false}
           value={value}
+          placeholder={placeholder}
           onChange={(event) => onChange(event.target.value)}
         />
       </span>

@@ -5,14 +5,17 @@ import {
   canvasNameError,
   createCanvasSet,
   createDesignCanvas,
+  duplicateCanvas,
   findCanvas,
   insertCanvas,
   isValidCanvasId,
   isValidCanvasName,
   MAX_CANVASES,
+  nextCanvasCopyName,
   nextCanvasName,
   removeCanvas,
   renameCanvas,
+  reorderCanvas,
   replaceCanvasRoot,
   restoreCanvas,
   selectCanvas,
@@ -123,6 +126,69 @@ describe("design canvas sets", () => {
       "Canvas 3",
     ]);
     expect(thirdBack.activeId).toBe(third.id);
+  });
+
+  it("duplicates a canvas after its source with fresh widget ids", () => {
+    let set = createCanvasSet();
+    set = addCanvas(set);
+    const [first, second] = set.canvases;
+
+    const duplicated = duplicateCanvas(set, first.id);
+    const copy = duplicated.canvases[1];
+
+    expect(duplicated.canvases.map((canvas) => canvas.name)).toEqual([
+      "Canvas 1",
+      "Canvas 1 copy",
+      "Canvas 2",
+    ]);
+    expect(copy.id).not.toBe(first.id);
+    expect(copy.root.id).not.toBe(first.root.id);
+    expect(copy.root.children[0].id).not.toBe(first.root.children[0].id);
+    expect(copy.root.children[0].children.map((child) => child.props)).toEqual(
+      first.root.children[0].children.map((child) => child.props),
+    );
+    expect(duplicated.activeId).toBe(copy.id);
+    expect(duplicated.canvases[2]).toBe(second);
+  });
+
+  it("names canvas copies uniquely and within the length limit", () => {
+    const set = createCanvasSet();
+    const copies = [
+      ...set.canvases,
+      { ...createDesignCanvas("Canvas 1 copy"), id: "copy-a" },
+      { ...createDesignCanvas("Canvas 1 copy 2"), id: "copy-b" },
+    ];
+
+    expect(nextCanvasCopyName(copies, "Canvas 1")).toBe("Canvas 1 copy 3");
+    expect(nextCanvasCopyName(copies, "x".repeat(60))).toHaveLength(60);
+  });
+
+  it("refuses to duplicate when the canvas limit is reached", () => {
+    let set = createCanvasSet();
+
+    while (set.canvases.length < MAX_CANVASES) {
+      set = addCanvas(set);
+    }
+
+    expect(duplicateCanvas(set, set.canvases[0].id)).toBe(set);
+    expect(duplicateCanvas(set, "missing")).toBe(set);
+  });
+
+  it("reorders canvases without changing the active canvas", () => {
+    let set = createCanvasSet();
+    set = addCanvas(set);
+    set = addCanvas(set);
+    const [first, second, third] = set.canvases;
+
+    const moved = reorderCanvas(set, third.id, first.id, "before");
+    expect(moved.canvases.map((canvas) => canvas.id)).toEqual([third.id, first.id, second.id]);
+    expect(moved.activeId).toBe(set.activeId);
+
+    const back = reorderCanvas(moved, third.id, second.id, "after");
+    expect(back.canvases.map((canvas) => canvas.id)).toEqual([first.id, second.id, third.id]);
+    expect(reorderCanvas(set, first.id, first.id, "before")).toBe(set);
+    expect(reorderCanvas(set, "missing", first.id, "before")).toBe(set);
+    expect(reorderCanvas(set, first.id, "missing", "before")).toBe(set);
   });
 
   it("rejects duplicate and excess canvas inserts", () => {

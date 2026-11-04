@@ -1,10 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ProjectInfo } from "../../shared/lib/project";
 import {
+  createCanvasHistoryEntry,
+  loadCanvasHistories,
+  rootFingerprint,
+  saveCanvasHistories,
+  trimCanvasHistory,
+  type CanvasHistoryMap,
+} from "./canvasHistoryStorage";
+import {
   addCanvas,
+  duplicateCanvas as duplicateCanvasInSet,
   MAX_CANVASES,
   removeCanvas,
   renameCanvas as renameCanvasInSet,
+  reorderCanvas as reorderCanvasInSet,
   replaceCanvasRoot,
   restoreCanvas,
   selectCanvas,
@@ -20,9 +30,16 @@ import {
   type DesignSaveStatus,
 } from "./designStorage";
 import { DesignWorkspaceContext, type DesignWorkspace } from "./designWorkspaceContext";
-import type { CanvasNode } from "./model";
+import {
+  adoptWidgetIds,
+  findNode,
+  topLevelSelection,
+  type CanvasHistory,
+  type CanvasNode,
+} from "./model";
 
 const AUTOSAVE_DELAY = 250;
+const HISTORY_SAVE_DELAY = 300;
 
 type WorkspaceState = {
   set: DesignSet;
@@ -40,6 +57,17 @@ type DesignWorkspaceProviderProps = {
 
 export function DesignWorkspaceProvider({ project, children }: DesignWorkspaceProviderProps) {
   const [initial] = useState(() => loadDesignSet(project.path));
+  const [initialHistory] = useState<CanvasHistoryMap>(() => {
+    const histories = loadCanvasHistories(project.path, initial.set.canvases);
+
+    for (const entry of histories.values()) {
+      for (const snapshot of [...entry.past, ...entry.future]) {
+        adoptWidgetIds(snapshot.root);
+      }
+    }
+
+    return histories;
+  });
   const [state, setState] = useState<WorkspaceState>(() => ({
     set: initial.set,
     dirty: initial.status !== "restored",
@@ -48,11 +76,34 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
     deleted: [],
     bytes: designSetBytes(initial.set),
   }));
+  const [clipboard, setClipboard] = useState<CanvasNode[]>([]);
   const stateRef = useRef(state);
+  const historyRef = useRef(initialHistory);
+  const historyTimer = useRef<number | null>(null);
 
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  const flushHistory = useCallback(() => {
+    if (historyTimer.current !== null) {
+      window.clearTimeout(historyTimer.current);
+      historyTimer.current = null;
+    }
+
+    saveCanvasHistories(project.path, historyRef.current);
+  }, [project.path]);
+
+  const scheduleHistorySave = useCallback(() => {
+    if (historyTimer.current !== null) {
+      window.clearTimeout(historyTimer.current);
+    }
+
+    historyTimer.current = window.setTimeout(() => {
+      historyTimer.current = null;
+      saveCanvasHistories(project.path, historyRef.current);
+    }, HISTORY_SAVE_DELAY);
+  }, [project.path]);
 
   useEffect(() => {
     if (!state.dirty) {
@@ -83,6 +134,8 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
 
   useEffect(() => {
     function flush() {
+      flushHistory();
+
       const current = stateRef.current;
 
       if (!current.dirty) {
@@ -113,7 +166,23 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
       window.removeEventListener("beforeunload", flush);
       flush();
     };
-  }, [project.path]);
+  }, [flushHistory, project.path]);
+
+  useEffect(() => {
+    const ids = new Set(state.set.canvases.map((canvas) => canvas.id));
+    let changed = false;
+
+    for (const id of [...historyRef.current.keys()]) {
+      if (!ids.has(id)) {
+        historyRef.current.delete(id);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      scheduleHistorySave();
+    }
+  }, [scheduleHistorySave, state.set.canvases]);
 
   const createCanvas = useCallback(() => {
     setState((current) => {
@@ -126,6 +195,33 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
       return { ...current, set, dirty: true, status: "saving" };
     });
   }, []);
+
+  const duplicateCanvas = useCallback((id: string) => {
+    setState((current) => {
+      const set = duplicateCanvasInSet(current.set, id);
+
+      if (set === current.set) {
+        return current;
+      }
+
+      return { ...current, set, dirty: true, status: "saving" };
+    });
+  }, []);
+
+  const reorderCanvas = useCallback(
+    (id: string, targetId: string, position: "before" | "after") => {
+      setState((current) => {
+        const set = reorderCanvasInSet(current.set, id, targetId, position);
+
+        if (set === current.set) {
+          return current;
+        }
+
+        return { ...current, set, dirty: true, status: "saving" };
+      });
+    },
+    [],
+  );
 
   const selectCanvasInSet = useCallback((id: string) => {
     setState((current) => {
@@ -209,6 +305,51 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
     });
   }, []);
 
+  const copySelection = useCallback((canvasId: string, ids: readonly string[]) => {
+    const canvas = stateRef.current.set.canvases.find((entry) => entry.id === canvasId);
+
+    if (!canvas) {
+      return;
+    }
+
+    const topLevel = topLevelSelection(canvas.root, ids).filter((id) => id !== canvas.root.id);
+    const nodes = topLevel
+      .map((id) => findNode(canvas.root, id))
+      .filter((node): node is CanvasNode => node !== null);
+
+    if (nodes.length > 0) {
+      setClipboard(nodes);
+    }
+  }, []);
+
+  const loadCanvasHistory = useCallback(
+    (canvasId: string, root: CanvasNode): CanvasHistory | null => {
+      const entry = historyRef.current.get(canvasId);
+
+      if (!entry || entry.rootFingerprint !== rootFingerprint(root)) {
+        return null;
+      }
+
+      return { past: entry.past, future: entry.future };
+    },
+    [],
+  );
+
+  const saveCanvasHistory = useCallback(
+    (canvasId: string, root: CanvasNode, history: CanvasHistory) => {
+      const entry = createCanvasHistoryEntry(root, history);
+
+      if (entry) {
+        historyRef.current.set(canvasId, trimCanvasHistory(entry));
+      } else {
+        historyRef.current.delete(canvasId);
+      }
+
+      scheduleHistorySave();
+    },
+    [scheduleHistorySave],
+  );
+
   const activeCanvas =
     state.set.canvases.find((canvas) => canvas.id === state.set.activeId) ?? state.set.canvases[0];
 
@@ -223,20 +364,32 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
       deletedCanvases: state.deleted,
       storageBytes: state.bytes,
       storageWarning: state.bytes >= MAX_DESIGN_BYTES_WARNING,
+      clipboard,
       createCanvas,
+      duplicateCanvas,
+      reorderCanvas,
       selectCanvas: selectCanvasInSet,
       renameCanvas,
       deleteCanvas,
       undoDelete,
       dismissDelete,
       updateCanvasRoot,
+      copySelection,
+      loadCanvasHistory,
+      saveCanvasHistory,
     }),
     [
       activeCanvas,
+      clipboard,
+      copySelection,
       createCanvas,
       deleteCanvas,
       dismissDelete,
+      duplicateCanvas,
+      loadCanvasHistory,
       renameCanvas,
+      reorderCanvas,
+      saveCanvasHistory,
       selectCanvasInSet,
       state.deleted,
       state.set,

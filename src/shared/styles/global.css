@@ -378,6 +378,7 @@ ul {
 }
 
 .canvas-list__item {
+  position: relative;
   display: flex;
   align-items: center;
   border-radius: var(--radius-sm);
@@ -385,6 +386,43 @@ ul {
 
 .canvas-list__item:hover {
   background: var(--color-bg-hover);
+}
+
+.canvas-list__item--dragging {
+  opacity: 0.45;
+}
+
+.canvas-list__item--drop-before::before,
+.canvas-list__item--drop-after::after {
+  position: absolute;
+  right: 4px;
+  left: 4px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--color-accent-strong);
+  content: "";
+  z-index: 2;
+}
+
+.canvas-list__item--drop-before::before {
+  top: -2px;
+}
+
+.canvas-list__item--drop-after::after {
+  bottom: -2px;
+}
+
+.canvas-list__grip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  color: var(--color-text-muted);
+  opacity: 0.35;
+  cursor: grab;
+}
+
+.canvas-list__item:active .canvas-list__grip {
+  cursor: grabbing;
 }
 
 .canvas-list__item--active {
@@ -428,7 +466,8 @@ ul {
   opacity: 0;
 }
 
-.canvas-list__rename {
+.canvas-list__rename,
+.canvas-list__duplicate {
   width: 24px;
   height: 24px;
   opacity: 0;
@@ -437,7 +476,9 @@ ul {
 .canvas-list__item:hover .canvas-list__delete,
 .canvas-list__delete:focus-visible,
 .canvas-list__item:hover .canvas-list__rename,
-.canvas-list__rename:focus-visible {
+.canvas-list__rename:focus-visible,
+.canvas-list__item:hover .canvas-list__duplicate,
+.canvas-list__duplicate:focus-visible {
   opacity: 1;
 }
 
@@ -1092,6 +1133,18 @@ ul {
   font-weight: 600;
 }
 
+.canvas-toolbar__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.canvas-toolbar__action {
+  width: 28px;
+  height: 28px;
+}
+
 .canvas-delete {
   flex: 0 0 auto;
 }
@@ -1160,7 +1213,8 @@ ul {
   cursor: pointer;
   transition:
     border-color var(--transition-fast),
-    box-shadow var(--transition-fast);
+    box-shadow var(--transition-fast),
+    opacity var(--transition-fast);
 }
 
 .canvas-node:hover {
@@ -1175,6 +1229,86 @@ ul {
 .canvas-node:focus-visible {
   outline: 2px solid var(--color-canvas-accent);
   outline-offset: 2px;
+}
+
+.canvas-node--dragging {
+  opacity: 0.45;
+}
+
+.canvas-node--drop-inside {
+  border-color: var(--color-canvas-accent);
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.35),
+    inset 0 0 0 1px rgba(37, 99, 235, 0.4);
+}
+
+.canvas-node--drop-before::before,
+.canvas-node--drop-after::after {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-canvas-accent);
+  content: "";
+  z-index: 4;
+}
+
+.canvas-node--drop-before::before {
+  top: -4px;
+}
+
+.canvas-node--drop-after::after {
+  bottom: -4px;
+}
+
+.canvas-node__children {
+  display: contents;
+}
+
+.canvas-node__toggle {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--color-canvas-border);
+  border-radius: 50%;
+  background: var(--color-bg-elevated);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.canvas-node--screen > .canvas-node__toggle {
+  top: 6px;
+  right: 6px;
+}
+
+.canvas-node:hover > .canvas-node__toggle,
+.canvas-node__toggle:focus-visible {
+  opacity: 1;
+}
+
+.canvas-node__toggle:hover {
+  color: var(--color-canvas-accent);
+}
+
+.canvas-node__toggle svg {
+  transform: rotate(90deg);
+  transition: transform var(--transition-fast);
+}
+
+.canvas-node__toggle--collapsed svg {
+  transform: rotate(0deg);
 }
 
 .canvas-node--screen {

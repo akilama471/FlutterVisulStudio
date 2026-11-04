@@ -1,4 +1,4 @@
-import { createStarterRoot, type CanvasNode } from "./model";
+import { cloneSubtree, createStarterRoot, type CanvasNode } from "./model";
 
 export const MAX_CANVASES = 20;
 export const MAX_CANVAS_NAME_LENGTH = 60;
@@ -86,6 +86,77 @@ export function addCanvas(set: DesignSet): DesignSet {
     canvases: [...set.canvases, canvas],
     activeId: canvas.id,
   };
+}
+
+export function nextCanvasCopyName(canvases: DesignCanvas[], name: string): string {
+  const used = new Set(canvases.map((canvas) => canvas.name.toLowerCase()));
+
+  for (let index = 1; index <= MAX_CANVASES + 1; index += 1) {
+    const suffix = index === 1 ? " copy" : ` copy ${index}`;
+    const base = name.slice(0, Math.max(1, MAX_CANVAS_NAME_LENGTH - suffix.length)).trimEnd();
+    const candidate = `${base}${suffix}`;
+
+    if (!used.has(candidate.toLowerCase())) {
+      return candidate;
+    }
+  }
+
+  return nextCanvasName(canvases);
+}
+
+export function duplicateCanvas(set: DesignSet, id: string): DesignSet {
+  if (set.canvases.length >= MAX_CANVASES) {
+    return set;
+  }
+
+  const index = set.canvases.findIndex((canvas) => canvas.id === id);
+
+  if (index === -1) {
+    return set;
+  }
+
+  const source = set.canvases[index];
+  const copy: DesignCanvas = {
+    id: nextCanvasId(),
+    name: nextCanvasCopyName(set.canvases, source.name),
+    root: cloneSubtree(source.root),
+  };
+  const canvases = [...set.canvases.slice(0, index + 1), copy, ...set.canvases.slice(index + 1)];
+
+  return { canvases, activeId: copy.id };
+}
+
+export function reorderCanvas(
+  set: DesignSet,
+  id: string,
+  targetId: string,
+  position: "before" | "after",
+): DesignSet {
+  if (id === targetId) {
+    return set;
+  }
+
+  const from = set.canvases.findIndex((canvas) => canvas.id === id);
+
+  if (from === -1 || !set.canvases.some((canvas) => canvas.id === targetId)) {
+    return set;
+  }
+
+  const canvases = set.canvases.slice();
+  const [moved] = canvases.splice(from, 1);
+  const targetIndex = canvases.findIndex((canvas) => canvas.id === targetId);
+
+  if (targetIndex === -1) {
+    return set;
+  }
+
+  canvases.splice(targetIndex + (position === "after" ? 1 : 0), 0, moved);
+
+  if (canvases.every((canvas, index) => canvas.id === set.canvases[index].id)) {
+    return set;
+  }
+
+  return { ...set, canvases };
 }
 
 export function selectCanvas(set: DesignSet, id: string): DesignSet {
