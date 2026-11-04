@@ -1,11 +1,11 @@
 # Flutter UI Studio
 
 A visual desktop studio for building Flutter user interfaces. This repository is currently at
-**Phase 9 - Canvas Editing Depth**: it builds on the Phase 8 workspace by completing the canvas
-editing model. Widgets can be reordered by drag and drop or the keyboard, selected in groups,
-duplicated, copied across canvases, and undone per canvas across restarts. Designs still live in
-local storage, file tabs are not persisted, and Flutter toolchain execution is not implemented
-yet.
+**Phase 10 - Design Portability**: it builds on the Phase 9 editing model by letting a design leave
+and re-enter the studio safely. Whole projects or single canvases export to versioned JSON and import
+only after a validated preview, rotating local snapshots protect long editing sessions, and an
+explicit project-folder copy can be written on request. Designs still live in local storage, file
+tabs are not persisted, and Flutter toolchain execution is not implemented yet.
 
 ## Stack
 
@@ -48,8 +48,8 @@ minutes.
 4. Use the refresh button in the explorer header to re-list the project and every expanded folder.
 5. The last successfully opened project is remembered and restored on the next launch.
 
-The tree ignores `.git`, `.dart_tool`, and `build`. Backup files created by saves appear as ordinary
-project files.
+The tree ignores `.git`, `.dart_tool`, `.flutter-ui-studio`, and `build`. Backup files created by saves
+appear as ordinary project files.
 
 ### Project files
 
@@ -115,7 +115,7 @@ enters a container, `ArrowLeft` collapses or leaves it, `Shift+Arrow` extends th
 The design is saved automatically after each edit and restored per project. The canvas header reports
 `Saving…`, `Saved locally`, or `Save failed`. Designs live in this application's local storage, keyed
 by the project path; switching projects keeps each project's design separate. Design data is never
-mixed with project files: only an explicit file save writes into the project folder.
+mixed with project files: only an explicit action writes into the project folder.
 
 ### Canvases
 
@@ -163,6 +163,40 @@ undo/redo shortcuts are ignored while a dialog is open.
 - Clearing the application's WebView2 profile, changing the project path, or uninstalling the
   application removes or orphans saved designs.
 - Designs are not shared between machines. Project files you edit are written only when you save.
+
+### Design portability and storage
+
+The **Design data** button in the canvas explorer header opens one dialog for moving, protecting, and
+cleaning up a design.
+
+1. **Export** writes the whole project or only the active canvas to a versioned JSON file. The native
+   save dialog chooses the destination, the file is validated as UTF-8 JSON and capped at 2 MiB, and
+   an existing target is copied to `name.json.bak` (then `.bak.1`, `.bak.2`, and so on) before it is
+   replaced.
+2. **Import** reads a `.json` design file, validates the format and design, and shows a preview with
+   the source, project label, export time, canvas names, canvas and widget counts, and byte size.
+   Nothing changes until **Import and replace** or **Add canvas** is pressed; a pre-import snapshot is
+   taken first.
+   - A project file replaces the current design.
+   - A canvas file adds one canvas with fresh widget ids and a unique name, directly after the active
+     canvas.
+3. **Project file** writes or reads the optional copy at `.flutter-ui-studio/design.json`. The folder
+   is created only when you write it, contains a `.gitignore` that ignores everything except itself,
+   and never appears in the project explorer. Reads use the same preview and confirmation flow.
+4. **Snapshots** are taken automatically after a save when at least a minute has passed since the
+   newest snapshot and the design changed. A snapshot is also taken before an import, restore, or
+   reset. Up to eight snapshots are kept (256 KiB each, 1 MiB total), newest first. **Browse
+   snapshots** shows the time, reason, canvas count, and size, with a confirmed **Restore** that saves
+   the current design as a new snapshot first.
+5. **Storage** reports the UTF-8 size of the design, undo history, snapshots, any legacy design, and
+   the total. Every canvas lists its widget count and size with a **Delete** action; deleting from here
+   uses the normal canvas delete and keeps the 10-second undo notification. **Reset project design**
+   clears the design, legacy design, and undo history and starts from one starter canvas; snapshots
+   are kept so the reset stays recoverable.
+
+Imported and restored designs are re-identified with fresh canvas and widget ids, and the canvas
+editor remounts so no stale selection or undo state survives. Export and import never include undo
+history, snapshots, or open file tabs, and there is no cloud sync or multi-user behaviour.
 
 ### Dart preview
 
@@ -235,7 +269,7 @@ src/
     styles/             Design tokens and global styles
   test/                 Test setup
 src-tauri/
-  src/commands/         Rust commands (`app_info`, project workspace, safe file read/write)
+  src/commands/         Rust commands (`app_info`, project workspace, safe file and design read/write)
   capabilities/         Least-privilege Tauri capability file
   icons/                Generated application icons
 assets/                 Source artwork for generated icons
@@ -244,36 +278,35 @@ docs/                   Engineering plans and reports
 
 Features may depend on `shared`, never the reverse. Cross-feature composition lives in `app/`.
 
-## Phase 9 scope
+## Phase 10 scope
 
 Included:
 
-- Drag and drop to reorder widgets and move subtrees between containers, with an insertion line for
-  before/after and an accent ring for inside drops.
-- Multi-selection with `Ctrl`/`Cmd` and `Shift`, group delete, and shared inspector edits when all
-  selected widgets have the same kind.
-- Duplicate, copy/paste within and across canvases, and keyboard copy/paste/duplicate shortcuts.
-- A full ARIA tree keyboard model with roving tabindex, arrow navigation, `Home`/`End`,
-  expand/collapse, range selection, and keyboard reorder.
-- Undo/redo history persisted per canvas across canvas switches and restarts, with fingerprint checks,
-  snapshot limits, and debounced storage writes.
-- Per-canvas duplicate and drag reorder in the explorer, including unique copy names and fresh
-  widget ids.
-- Tests for the model actions, history storage, canvas set helpers, inspector, keyboard model,
-  drag/drop, copy/paste, history restart, and explorer interactions.
-- All Phase 0–8 project, canvas, inspector, persistence, Dart, clipboard, safe apply, multi-canvas,
-  and file-editing behaviour is retained.
+- Versioned project and single-canvas JSON export through a native save dialog, with numbered backups.
+- Validated import with an explicit preview before replacing a design or adding a canvas.
+- Fresh canvas and widget ids on every imported or restored design, plus an editor remount.
+- Rotating automatic snapshots with a restore browser and pre-change safety snapshots.
+- An explicit, Git-ignored project design file at `.flutter-ui-studio/design.json`, hidden from the
+  explorer and written only on request.
+- A design-data dialog with storage sizes, per-canvas deletion, snapshot restore, and a confirmed
+  reset that keeps snapshots.
+- Rust-side revalidation of every design file: absolute `.json` paths, size, UTF-8, no NUL bytes,
+  backups, and an optional modified-time conflict check.
+- Tests for transfer validation, snapshots, storage usage, file services, Rust design commands, and
+  the dialog flows.
+- All Phase 0–9 project, canvas, inspector, persistence, Dart, clipboard, safe apply, multi-canvas,
+  file-editing, drag/drop, multi-select, and history behaviour is retained.
 
 Not included (future phases):
 
+- Cloud sync, accounts, collaboration, and background filesystem watching.
+- Automatic reads or writes of the project-folder design file.
+- Merging two projects widget-by-widget or importing into an arbitrary canvas.
+- Storing file tabs, undo history, or snapshots in exported design files.
 - Arbitrary layout constraints, responsive breakpoints, and free-form canvas positioning.
 - Copying to or pasting from the operating-system clipboard for canvas widgets.
-- Multi-drag reparenting rules beyond top-level selected subtrees.
 - Creating, renaming, deleting, moving, or drag-and-dropping project files.
 - Syntax highlighting, code folding, search/replace, or diagnostics in the file editor.
-- File watching or background polling for external changes.
-- Persisting open file tabs or unsaved buffers across project switches or restarts.
-- Exporting or importing designs, cloud sync, or storing designs in the project folder.
 - Editing generated code before writing, or running, analysing, or formatting the project with the
   Flutter toolchain.
 - Responsive breakpoints, constraints, alignment, theming, assets, animations, gestures, and full
