@@ -63,7 +63,7 @@ describe("App", () => {
       screen.getByRole("heading", { level: 1, name: "Flutter UI Studio" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("contentinfo", { name: "Status bar" })).toBeInTheDocument();
-    expect(screen.getByText("Phase 5")).toBeInTheDocument();
+    expect(screen.getByText("Phase 6")).toBeInTheDocument();
     expect(
       within(screen.getByRole("complementary", { name: "Inspector" })).getByText("No project open"),
     ).toBeInTheDocument();

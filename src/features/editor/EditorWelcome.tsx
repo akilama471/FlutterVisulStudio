@@ -9,6 +9,8 @@ const plannedCapabilities = [
   { icon: "code", label: "Dart generation" },
   { icon: "file", label: "Saved designs" },
   { icon: "sparkles", label: "Safe project writes" },
+  { icon: "layers", label: "Multiple canvases" },
+  { icon: "undo", label: "Undo and redo" },
 ] as const;
 
 type EditorWelcomeProps = {
@@ -45,8 +47,8 @@ export function EditorWelcome({ status, onOpenProject }: EditorWelcomeProps) {
           </Button>
         </div>
         <p className="welcome__note">
-          Phase 5 can write the generated Dart to your project after a diff review, with a backup of
-          the existing entry point. Open a project to start composing.
+          Phase 6 adds undo/redo and multiple canvases per project, so you can explore variations
+          before writing the generated Dart after a diff review. Open a project to start composing.
         </p>
       </div>
     </section>
