@@ -1,6 +1,7 @@
 import type { Dispatch } from "react";
 import { Button } from "../../shared/components/Button";
 import { Icon, type IconName } from "../../shared/components/Icon";
+import { IconButton } from "../../shared/components/IconButton";
 import { CanvasNodeView } from "./CanvasNodeView";
 import type { DesignSaveStatus } from "./designStorage";
 import {
@@ -30,14 +31,20 @@ type CanvasWorkspaceProps = {
   canvas: CanvasState;
   dispatch: Dispatch<CanvasAction>;
   projectName: string;
+  canvasName: string;
   saveStatus: DesignSaveStatus;
+  canUndo: boolean;
+  canRedo: boolean;
 };
 
 export function CanvasWorkspace({
   canvas,
   dispatch,
   projectName,
+  canvasName,
   saveStatus,
+  canUndo,
+  canRedo,
 }: CanvasWorkspaceProps) {
   const selected = findNode(canvas.root, canvas.selectedId);
   const insertionParent = resolveInsertionParent(canvas.root, canvas.selectedId);
@@ -49,10 +56,26 @@ export function CanvasWorkspace({
         <div>
           <h1 className="canvas-title">Canvas</h1>
           <p className="canvas-subtitle">
-            {projectName} · Select a widget, then add into the highlighted container.
+            {projectName} · {canvasName} · Select a widget, then add into the highlighted container.
           </p>
         </div>
         <div className="canvas-header__meta">
+          <div className="canvas-history" role="group" aria-label="Canvas history">
+            <IconButton
+              className="canvas-history__button"
+              label="Undo"
+              icon="undo"
+              disabled={!canUndo}
+              onClick={() => dispatch({ type: "undo" })}
+            />
+            <IconButton
+              className="canvas-history__button"
+              label="Redo"
+              icon="redo"
+              disabled={!canRedo}
+              onClick={() => dispatch({ type: "redo" })}
+            />
+          </div>
           <span
             className={`canvas-save canvas-save--${saveStatus}`}
             role="status"

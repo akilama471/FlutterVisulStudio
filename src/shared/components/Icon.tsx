@@ -9,12 +9,16 @@ export type IconName =
   | "folder"
   | "grid"
   | "layers"
+  | "plus"
+  | "redo"
   | "row"
   | "sliders"
   | "sparkles"
   | "square"
   | "text"
-  | "trash";
+  | "trash"
+  | "undo"
+  | "x";
 
 const paths: Record<IconName, ReactNode> = {
   button: (
@@ -58,6 +62,18 @@ const paths: Record<IconName, ReactNode> = {
       <path d="m3 17 9 5 9-5" />
     </>
   ),
+  plus: (
+    <>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </>
+  ),
+  redo: (
+    <>
+      <path d="m15 14 5-5-5-5" />
+      <path d="M20 9h-9a6 6 0 0 0 0 12h5" />
+    </>
+  ),
   row: (
     <>
       <rect x="3" y="8" width="8" height="8" rx="1.5" />
@@ -98,6 +114,18 @@ const paths: Record<IconName, ReactNode> = {
       <path d="m6 7 1 13h10l1-13" />
       <path d="M10 11v6" />
       <path d="M14 11v6" />
+    </>
+  ),
+  undo: (
+    <>
+      <path d="M9 14 4 9l5-5" />
+      <path d="M4 9h9a6 6 0 0 1 0 12H8" />
+    </>
+  ),
+  x: (
+    <>
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
     </>
   ),
 };

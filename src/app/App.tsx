@@ -8,6 +8,8 @@ import { InspectorPanel } from "../features/inspector/InspectorPanel";
 import { NoProjectInspector } from "../features/canvas/CanvasInspector";
 import { ProjectExplorer } from "../features/project/ProjectExplorer";
 import { useProjectWorkspace } from "../features/project/useProjectWorkspace";
+import { DesignWorkspaceProvider } from "../features/canvas/DesignWorkspaceProvider";
+import { CanvasUndoToast } from "../features/canvas/CanvasUndoToast";
 import { FALLBACK_APP_INFO, getAppInfo, type AppInfo } from "../shared/lib/appInfo";
 import { DesignSurface } from "./DesignSurface";
 
@@ -49,18 +51,29 @@ export function App() {
           onToggleExplorer={() => togglePanel("explorer")}
           onToggleInspector={() => togglePanel("inspector")}
         />
-        {panels.explorer ? (
-          <ProjectExplorer
-            project={project}
-            status={status}
-            error={error}
-            onOpenProject={openProjectFromPicker}
-          />
-        ) : null}
         {project ? (
-          <DesignSurface key={project.path} project={project} showInspector={panels.inspector} />
+          <DesignWorkspaceProvider key={project.path} project={project}>
+            {panels.explorer ? (
+              <ProjectExplorer
+                project={project}
+                status={status}
+                error={error}
+                onOpenProject={openProjectFromPicker}
+              />
+            ) : null}
+            <DesignSurface project={project} showInspector={panels.inspector} />
+            <CanvasUndoToast />
+          </DesignWorkspaceProvider>
         ) : (
           <>
+            {panels.explorer ? (
+              <ProjectExplorer
+                project={null}
+                status={status}
+                error={error}
+                onOpenProject={openProjectFromPicker}
+              />
+            ) : null}
             <EditorArea
               tabs={[{ id: "welcome", label: "Welcome", icon: "file" }]}
               activeTabId="welcome"

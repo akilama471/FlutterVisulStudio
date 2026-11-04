@@ -2,6 +2,7 @@ import { Button } from "../../shared/components/Button";
 import { EmptyState } from "../../shared/components/EmptyState";
 import { Icon } from "../../shared/components/Icon";
 import { IconButton } from "../../shared/components/IconButton";
+import { CanvasList } from "../canvas/CanvasList";
 import type { ProjectInfo } from "../../shared/lib/project";
 import { ProjectFiles } from "./ProjectFiles";
 import type { ProjectStatus } from "./useProjectWorkspace";
@@ -42,6 +43,7 @@ export function ProjectExplorer({ project, status, error, onOpenProject }: Proje
               <Icon name="folder" size={14} className="project-summary__icon" />
               <span className="project-summary__name">{project.name}</span>
             </div>
+            <CanvasList />
             <ProjectFiles key={project.path} project={project} />
           </>
         ) : status === "restoring" ? (

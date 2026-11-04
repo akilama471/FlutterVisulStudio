@@ -5,7 +5,7 @@ type ButtonProps = {
   children: ReactNode;
   onClick?: MouseEventHandler<HTMLButtonElement>;
   disabled?: boolean;
-  variant?: "primary" | "ghost";
+  variant?: "primary" | "ghost" | "danger";
   icon?: IconName;
   className?: string;
   title?: string;

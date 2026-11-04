@@ -1,16 +1,12 @@
-import { useEffect, useMemo, useReducer, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { EditorArea, type EditorTab } from "../features/editor/EditorArea";
 import { InspectorPanel } from "../features/inspector/InspectorPanel";
 import { CanvasInspector } from "../features/canvas/CanvasInspector";
 import { CanvasWorkspace } from "../features/canvas/CanvasWorkspace";
+import type { DesignCanvas } from "../features/canvas/designSet";
+import type { DesignSaveStatus } from "../features/canvas/designStorage";
+import { useDesignWorkspace } from "../features/canvas/designWorkspaceContext";
 import { canvasReducer, type CanvasNode, type CanvasState } from "../features/canvas/model";
-import {
-  clearLegacyDesign,
-  loadDesignSet,
-  saveDesignSet,
-  type DesignSaveStatus,
-} from "../features/canvas/designStorage";
-import { findCanvas, replaceCanvasRoot } from "../features/canvas/designSet";
 import { DartPreview } from "../features/dart/DartPreview";
 import { generateDart } from "../features/dart/generateDart";
 import type { ProjectInfo } from "../shared/lib/project";
@@ -20,8 +16,6 @@ const DESIGN_TABS: EditorTab[] = [
   { id: "dart", label: "Dart", icon: "code" },
 ];
 
-const AUTOSAVE_DELAY = 250;
-
 type DesignView = "canvas" | "dart";
 
 type DesignSurfaceProps = {
@@ -30,47 +24,86 @@ type DesignSurfaceProps = {
 };
 
 export function DesignSurface({ project, showInspector }: DesignSurfaceProps) {
-  const [initial] = useState(() => loadDesignSet(project.path));
-  const [activeCanvas] = useState(
-    () => findCanvas(initial.set, initial.set.activeId) ?? initial.set.canvases[0],
+  const { activeCanvas, saveStatus, updateCanvasRoot } = useDesignWorkspace();
+
+  return (
+    <CanvasEditorSurface
+      key={activeCanvas.id}
+      project={project}
+      canvas={activeCanvas}
+      saveStatus={saveStatus}
+      showInspector={showInspector}
+      onRootChange={updateCanvasRoot}
+    />
   );
-  const [canvas, dispatch] = useReducer(
-    canvasReducer,
-    activeCanvas.root,
-    (savedRoot): CanvasState => ({
-      root: savedRoot,
-      selectedId: null,
-      past: [],
-      future: [],
-      coalesceKey: null,
-    }),
-  );
+}
+
+type CanvasEditorSurfaceProps = {
+  project: ProjectInfo;
+  canvas: DesignCanvas;
+  saveStatus: DesignSaveStatus;
+  showInspector: boolean;
+  onRootChange: (canvasId: string, root: CanvasNode) => void;
+};
+
+function CanvasEditorSurface({
+  project,
+  canvas,
+  saveStatus,
+  showInspector,
+  onRootChange,
+}: CanvasEditorSurfaceProps) {
+  const [state, dispatch] = useReducer(canvasReducer, canvas.root, (root): CanvasState => ({
+    root,
+    selectedId: null,
+    past: [],
+    future: [],
+    coalesceKey: null,
+  }));
   const [view, setView] = useState<DesignView>("canvas");
-  const [savedRoot, setSavedRoot] = useState<CanvasNode | null>(() =>
-    initial.status === "restored" ? activeCanvas.root : null,
-  );
-  const [failedRoot, setFailedRoot] = useState<CanvasNode | null>(null);
-  const saveStatus: DesignSaveStatus =
-    failedRoot === canvas.root ? "error" : savedRoot === canvas.root ? "saved" : "saving";
-  const code = useMemo(() => generateDart(canvas.root), [canvas.root]);
+  const reportedRoot = useRef(canvas.root);
+  const code = useMemo(() => generateDart(state.root), [state.root]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const nextSet = replaceCanvasRoot(initial.set, activeCanvas.id, canvas.root);
+    if (state.root === reportedRoot.current) {
+      return;
+    }
 
-      if (saveDesignSet(project.path, nextSet)) {
-        if (initial.status === "migrated") {
-          clearLegacyDesign(project.path);
-        }
-        setFailedRoot(null);
-        setSavedRoot(canvas.root);
-      } else {
-        setFailedRoot(canvas.root);
+    reportedRoot.current = state.root;
+    onRootChange(canvas.id, state.root);
+  }, [canvas.id, onRootChange, state.root]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) {
+        return;
       }
-    }, AUTOSAVE_DELAY);
 
-    return () => window.clearTimeout(timer);
-  }, [activeCanvas.id, canvas.root, initial, project.path]);
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+
+      if (key === "z") {
+        event.preventDefault();
+        dispatch({ type: event.shiftKey ? "redo" : "undo" });
+      } else if (key === "y") {
+        event.preventDefault();
+        dispatch({ type: "redo" });
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   function selectView(id: string) {
     setView(id === "dart" ? "dart" : "canvas");
@@ -81,10 +114,13 @@ export function DesignSurface({ project, showInspector }: DesignSurfaceProps) {
       <EditorArea tabs={DESIGN_TABS} activeTabId={view} onSelectTab={selectView}>
         {view === "canvas" ? (
           <CanvasWorkspace
-            canvas={canvas}
+            canvas={state}
             dispatch={dispatch}
             projectName={project.name}
+            canvasName={canvas.name}
             saveStatus={saveStatus}
+            canUndo={state.past.length > 0}
+            canRedo={state.future.length > 0}
           />
         ) : (
           <DartPreview code={code} project={project} />
@@ -92,7 +128,7 @@ export function DesignSurface({ project, showInspector }: DesignSurfaceProps) {
       </EditorArea>
       {showInspector ? (
         <InspectorPanel>
-          <CanvasInspector canvas={canvas} dispatch={dispatch} />
+          <CanvasInspector canvas={state} dispatch={dispatch} />
         </InspectorPanel>
       ) : null}
     </>

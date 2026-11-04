@@ -8,6 +8,7 @@ import {
   saveDesignSet,
 } from "../features/canvas/designStorage";
 import { createWidget, type CanvasNode } from "../features/canvas/model";
+import { DesignWorkspaceProvider } from "../features/canvas/DesignWorkspaceProvider";
 import { DesignSurface } from "./DesignSurface";
 
 const PROJECT = {
@@ -17,7 +18,11 @@ const PROJECT = {
 };
 
 function renderSurface() {
-  return render(<DesignSurface project={PROJECT} showInspector />);
+  return render(
+    <DesignWorkspaceProvider project={PROJECT}>
+      <DesignSurface project={PROJECT} showInspector />
+    </DesignWorkspaceProvider>,
+  );
 }
 
 function designWithText(content: string): CanvasNode {
