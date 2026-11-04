@@ -1,10 +1,10 @@
 # Flutter UI Studio
 
 A visual desktop studio for building Flutter user interfaces. This repository is currently at
-**Phase 6 - Workspace Safety**: it builds on the Phase 5 safe Dart apply flow by adding undo and
-redo, plus multiple named canvases per project that can be created, switched, and deleted from the
-explorer. Designs still live in local storage, only the Dart entry point is ever written to the
-project, and drag and drop plus toolchain execution are not implemented yet.
+**Phase 7 - Polish and Hardening**: it builds on the Phase 6 workspace by adding canvas renaming, a
+queue of individually undoable delete notifications, dialog focus trapping, storage-size warnings,
+and accessibility improvements. Designs still live in local storage, only the Dart entry point is
+ever written to the project, and drag and drop plus toolchain execution are not implemented yet.
 
 ## Stack
 
@@ -79,21 +79,35 @@ Each project holds one or more canvases, listed under **Canvases** in the explor
    A project can hold up to 20 canvases.
 2. Click a canvas name to switch to it. Each canvas keeps its own widget tree, and the active canvas
    is remembered across restarts.
-3. Use the trash button on a canvas row to delete it. A confirmation dialog appears first, and the
+3. Use the pencil button on a canvas row to rename it. Names are trimmed, must be 1–60 characters,
+   and must be unique within the project regardless of case. The dialog validates as you type and
+   saves with Enter or **Save name**; Escape cancels.
+4. Use the trash button on a canvas row to delete it. A confirmation dialog appears first, and the
    last remaining canvas cannot be deleted.
-4. After deleting, a notification offers **Undo** for 10 seconds (or **Dismiss**). Undoing restores
-   the canvas at its previous position with its widgets intact.
+5. After deleting, a notification offers **Undo** for 10 seconds (or **Dismiss**). Undoing restores
+   the canvas at its previous position with its widgets intact. Deleting several canvases quickly
+   stacks one notification per canvas, each with its own timer, so every deletion stays recoverable
+   independently.
 
 Undo/redo history is per mounted canvas: switching canvases or restarting the application starts a
 fresh history. Designs from earlier versions migrate into a single canvas named **Main**.
 
+All dialogs keep keyboard focus inside themselves while open: Tab and Shift+Tab cycle through their
+controls, Escape closes them, and focus returns to the button that opened the dialog. The canvas
+undo/redo shortcuts are ignored while a dialog is open.
+
 ### Design persistence
 
 - Edits are written 250 ms after the last change. There is no manual save button.
+- A pending edit is flushed synchronously when the window is hidden or closed, so a quick close does
+  not lose the last change.
 - The saved canvas set is validated before it is written and before it is restored. Invalid or
   unreadable data falls back to a single starter canvas.
 - Widget trees and the active canvas are stored. Selection, undo/redo history, active tab, and panel
   visibility reset on restore.
+- Large designs are measured in UTF-8 bytes. Above 1 MiB, the explorer shows an advisory warning with
+  the current size and suggests deleting unused canvases. The real limit is set by WebView2, so the
+  warning does not block editing.
 - Clearing the application's WebView2 profile, changing the project path, or uninstalling the
   application removes or orphans saved designs.
 - Nothing is written into the Flutter project folder, and designs are not shared between machines.
@@ -175,33 +189,37 @@ docs/                   Engineering plans and reports
 
 Features may depend on `shared`, never the reverse. Cross-feature composition lives in `app/`.
 
-## Phase 6 scope
+## Phase 7 scope
 
 Included:
 
-- Per-canvas undo/redo with header buttons and `Ctrl+Z`, `Ctrl+Y`, `Ctrl+Shift+Z` shortcuts.
-- Bounded in-memory history (100 steps) with inspector edits coalesced into one step.
-- Undo and redo results are autosaved through the existing debounced write path.
-- Multiple canvases per project, listed in the explorer with an active canvas.
-- **New canvas** action with generated names, capped at 20 canvases.
-- Switch canvases; each keeps an independent widget tree and its own mounted history.
-- Confirm-before-delete with a 10-second notification that can undo the deletion.
-- Version 2 local storage for canvas sets, migrating Phase 4 designs into a **Main** canvas.
-- Unit tests for history, canvas set operations, storage/migration, the canvas list, and undo/redo
-  in the design surface.
-- All Phase 0–5 project, canvas, inspector, persistence, Dart, clipboard, and safe apply behaviour is
-  retained.
+- Canvas renaming with a pencil action, dialog, live validation, trimmed names, 60-character cap, and
+  case-insensitive uniqueness.
+- A queue of deleted-canvas notifications: each deletion keeps its own 10-second timer, **Undo**, and
+  **Dismiss**, and restoring uses the surviving neighbours to return the canvas to its original order.
+- Shared dialog focus trap for the apply, delete, and rename dialogs, including focus restoration to
+  the invoking control.
+- Storage-size measurement, an advisory warning above 1 MiB, and a synchronous flush of pending edits
+  on `pagehide` and `beforeunload`.
+- Accessibility polish: canvas tree items expose `aria-level`, `aria-posinset`, and `aria-setsize`,
+  the undo/redo buttons expose `aria-keyshortcuts`, and canvas shortcuts are suppressed while a
+  dialog is open.
+- Tests for rename validation, queued undo, focus trapping, storage warnings, close flushing, and
+  tree/shortcut accessibility.
+- All Phase 0–6 project, canvas, inspector, persistence, Dart, clipboard, safe apply, undo/redo, and
+  multi-canvas behaviour is retained.
 
 Not included (future phases):
 
 - Persisting undo/redo history across canvas switches or application restarts.
-- Renaming canvases, reordering canvases by drag and drop, or duplicating a canvas.
+- Reordering canvases by drag and drop, duplicating a canvas, multi-select, or copy/paste.
+- Exporting or importing designs, cloud sync, or storing designs in the project folder.
+- A full ARIA tree keyboard model (arrow-key navigation between widgets).
 - Writing design JSON or any file other than the Dart entry point.
 - Editing generated code before writing, or a general writable file editor.
 - Running, analysing, or formatting the project with the Flutter toolchain after writing.
 - File watching, external-change detection, or reloading the preview from disk.
-- Multi-file generation, cloud sync, export/import, or design sharing.
-- Drag and drop, reordering, multi-select, or copy/paste.
+- Multi-file generation or design sharing.
 - Responsive breakpoints, constraints, alignment, theming, assets, animations, gestures, and full
   Flutter widget coverage.
 - Opening or editing arbitrary project file contents, multi-root workspaces.
