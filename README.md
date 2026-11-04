@@ -1,10 +1,10 @@
 # Flutter UI Studio
 
 A visual desktop studio for building Flutter user interfaces. This repository is currently at
-**Phase 7 - Polish and Hardening**: it builds on the Phase 6 workspace by adding canvas renaming, a
-queue of individually undoable delete notifications, dialog focus trapping, storage-size warnings,
-and accessibility improvements. Designs still live in local storage, only the Dart entry point is
-ever written to the project, and drag and drop plus toolchain execution are not implemented yet.
+**Phase 8 - Project Explorer Completion**: it builds on the Phase 7 workspace by making the explorer
+open, edit, save, and safely reload real project text files in editor tabs. Designs still live in
+local storage, file tabs are not persisted, and drag and drop plus toolchain execution are not
+implemented yet.
 
 ## Stack
 
@@ -42,10 +42,38 @@ minutes.
 1. Select **Open project folder** in the explorer header, or **Open Flutter project** in the empty
    state.
 2. Choose a folder containing a `pubspec.yaml`.
-3. Browse the project tree; folders load lazily when expanded.
-4. The last successfully opened project is remembered and restored on the next launch.
+3. Browse the project tree; folders load lazily when expanded, and clicking a file opens it in an
+   editor tab.
+4. Use the refresh button in the explorer header to re-list the project and every expanded folder.
+5. The last successfully opened project is remembered and restored on the next launch.
 
-The tree ignores `.git`, `.dart_tool`, and `build`. File contents are not opened yet.
+The tree ignores `.git`, `.dart_tool`, and `build`. Backup files created by saves appear as ordinary
+project files.
+
+### Project files
+
+**Canvas** and **Dart** are fixed tabs. Files you open are appended as closable tabs with a dirty
+dot and an inspector that shows the path, size, encoding, modified time, and last backup.
+
+1. Click a file in the explorer. It must be UTF-8 text without NUL bytes and at most 1 MiB
+   (`pubspec.yaml`, Markdown, Dart, Gradle, and JSON all work; images and binaries are rejected with
+   a **Retry** action).
+2. Edit in the plain monospace editor. There is no autosave for project files.
+3. Save with the **Save** button or `Ctrl+S`. Saving a file that changed on disk is rejected rather
+   than silently overwriting it.
+4. Every successful save copies the previous contents beside the file as `name.bak`, then
+   `.bak.1`, `.bak.2`, and so on, before writing.
+5. Closing a tab with unsaved changes asks for confirmation; **Keep editing** cancels. Closing the
+   window with unsaved file tabs also asks the WebView to confirm.
+
+The studio checks open files when the window regains focus and when a tab is activated. A clean file
+reloads from disk automatically. A dirty file shows an **External change** banner with **Reload**
+(discard local edits and read the file) and **Overwrite** (write the local text, keeping a backup).
+A save conflict shows the same banner.
+
+File tabs stay inside the open project. This phase cannot create, rename, delete, or move files, and
+it does not watch the filesystem: refresh, focus, tab activation, and save are the detection points.
+File tabs are intentionally not restored across restarts or project switches.
 
 ### Visual canvas
 
@@ -69,7 +97,8 @@ Opening a project replaces the welcome surface with the visual canvas.
 
 The design is saved automatically after each edit and restored per project. The canvas header reports
 `Saving…`, `Saved locally`, or `Save failed`. Designs live in this application's local storage, keyed
-by the project path; switching projects keeps each project's design separate.
+by the project path; switching projects keeps each project's design separate. Design data is never
+mixed with project files: only an explicit file save writes into the project folder.
 
 ### Canvases
 
@@ -110,11 +139,12 @@ undo/redo shortcuts are ignored while a dialog is open.
   warning does not block editing.
 - Clearing the application's WebView2 profile, changing the project path, or uninstalling the
   application removes or orphans saved designs.
-- Nothing is written into the Flutter project folder, and designs are not shared between machines.
+- Designs are not shared between machines. Project files you edit are written only when you save.
 
 ### Dart preview
 
-The editor has **Canvas** and **Dart** tabs while a project is open.
+The editor has fixed **Canvas** and **Dart** tabs while a project is open, followed by any project
+file tabs you open.
 
 1. Select the **Dart** tab to see readable Dart generated from the current widget tree.
 2. The preview is read-only and always regenerated from the latest canvas state. Edit a property on
@@ -137,10 +167,11 @@ Generated code is a self-contained `lib/main.dart`-style file with a Material ap
    on. The header reports `Written to lib/main.dart` and the backup path.
 5. A missing entry point is created without a backup.
 
-Only the project entry point is written, and only after an explicit confirmation. The target is
-validated again in Rust: it must be a `.dart` file under the project's `lib/` folder, it cannot
-escape the active project, and contents are capped at 1 MiB. The studio does not run, analyse, or
-format the project after writing.
+Only the project entry point is written by the apply flow, and only after an explicit confirmation. The
+target is validated again in Rust: it must be a `.dart` file under the project's `lib/` folder, it
+cannot escape the active project, and contents are capped at 1 MiB. General text writes use the
+separate file editor and its own validation. The studio does not run, analyse, or format the project
+after writing.
 
 ## Scripts
 
@@ -172,6 +203,7 @@ src/
     canvas/             Widget model, reducer, history, canvases, inspector, local storage
     dart/               Dart generator, line diff, apply dialog, read-only preview
     editor/             Header, activity bar, editor tabs, status bar
+    files/              File workspace, text editor, file inspector, discard dialog
     inspector/          Inspector panel shell
     project/            Project picker, workspace hook, storage, lazy file tree
   shared/
@@ -189,40 +221,43 @@ docs/                   Engineering plans and reports
 
 Features may depend on `shared`, never the reverse. Cross-feature composition lives in `app/`.
 
-## Phase 7 scope
+## Phase 8 scope
 
 Included:
 
-- Canvas renaming with a pencil action, dialog, live validation, trimmed names, 60-character cap, and
-  case-insensitive uniqueness.
-- A queue of deleted-canvas notifications: each deletion keeps its own 10-second timer, **Undo**, and
-  **Dismiss**, and restoring uses the surviving neighbours to return the canvas to its original order.
-- Shared dialog focus trap for the apply, delete, and rename dialogs, including focus restoration to
-  the invoking control.
-- Storage-size measurement, an advisory warning above 1 MiB, and a synchronous flush of pending edits
-  on `pagehide` and `beforeunload`.
-- Accessibility polish: canvas tree items expose `aria-level`, `aria-posinset`, and `aria-setsize`,
-  the undo/redo buttons expose `aria-keyshortcuts`, and canvas shortcuts are suppressed while a
-  dialog is open.
-- Tests for rename validation, queued undo, focus trapping, storage warnings, close flushing, and
-  tree/shortcut accessibility.
-- All Phase 0–6 project, canvas, inspector, persistence, Dart, clipboard, safe apply, undo/redo, and
+- Opening any existing UTF-8 text file under the project in a closable editor tab beside the fixed
+  **Canvas** and **Dart** tabs.
+- A dependency-free monospace editor with a synced line gutter, dirty state, byte/line counts, and
+  explicit **Save** plus `Ctrl+S`.
+- Safe text commands in Rust with canonical root checks, ignored-folder rejection, UTF-8/NUL
+  validation, a 1 MiB cap, modified-time conflict detection, and numbered sibling backups.
+- Automatic reload of clean files and an external-change banner with **Reload** and **Overwrite** for
+  dirty files, including save conflicts.
+- Manual explorer refresh that re-lists the root and every expanded folder, plus a refresh after each
+  successful save.
+- A dirty-tab discard dialog and a best-effort `beforeunload` guard while any file tab is unsaved.
+- A file inspector showing path, size, encoding, modified time, save status, and last backup.
+- Tests for text service validation, explorer opening and refresh, the file workspace lifecycle, and
+  the end-to-end App flow.
+- All Phase 0–7 project, canvas, inspector, persistence, Dart, clipboard, safe apply, undo/redo, and
   multi-canvas behaviour is retained.
 
 Not included (future phases):
 
+- Creating, renaming, deleting, moving, or drag-and-dropping project files.
+- Syntax highlighting, code folding, search/replace, or diagnostics in the file editor.
+- File watching or background polling for external changes.
+- Persisting open file tabs or unsaved buffers across project switches or restarts.
+- A project-switch prompt for unsaved file tabs.
+- Binary or asset previews and editing files outside the open project.
 - Persisting undo/redo history across canvas switches or application restarts.
 - Reordering canvases by drag and drop, duplicating a canvas, multi-select, or copy/paste.
 - Exporting or importing designs, cloud sync, or storing designs in the project folder.
 - A full ARIA tree keyboard model (arrow-key navigation between widgets).
-- Writing design JSON or any file other than the Dart entry point.
-- Editing generated code before writing, or a general writable file editor.
-- Running, analysing, or formatting the project with the Flutter toolchain after writing.
-- File watching, external-change detection, or reloading the preview from disk.
-- Multi-file generation or design sharing.
+- Editing generated code before writing, or running, analysing, or formatting the project with the
+  Flutter toolchain.
 - Responsive breakpoints, constraints, alignment, theming, assets, animations, gestures, and full
   Flutter widget coverage.
-- Opening or editing arbitrary project file contents, multi-root workspaces.
 
 ## License
 
