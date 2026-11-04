@@ -1,7 +1,18 @@
+import {
+  adoptCanvasIds,
+  createCanvasSet,
+  isValidCanvasId,
+  isValidCanvasName,
+  MAX_CANVASES,
+  type DesignCanvas,
+  type DesignSet,
+} from "./designSet";
 import { adoptWidgetIds, canHaveChildren, type CanvasNode, type WidgetKind } from "./model";
 
-const STORAGE_PREFIX = "flutter-ui-studio:design:v1:";
-const DESIGN_VERSION = 1;
+const STORAGE_PREFIX = "flutter-ui-studio:designs:v2:";
+const LEGACY_STORAGE_PREFIX = "flutter-ui-studio:design:v1:";
+const DESIGN_VERSION = 2;
+const LEGACY_DESIGN_VERSION = 1;
 const MAX_NODES = 1000;
 const MAX_DEPTH = 50;
 const MAX_ID_LENGTH = 120;
@@ -21,11 +32,11 @@ const WIDGET_KINDS: readonly WidgetKind[] = [
 
 export type DesignSaveStatus = "saving" | "saved" | "error";
 
-export type DesignLoadStatus = "restored" | "missing" | "invalid" | "unavailable";
+export type DesignSetLoadStatus = "restored" | "migrated" | "missing" | "invalid" | "unavailable";
 
-export type DesignLoadResult = {
-  status: DesignLoadStatus;
-  root: CanvasNode | null;
+export type DesignSetLoadResult = {
+  status: DesignSetLoadStatus;
+  set: DesignSet;
 };
 
 type ParseStats = {
@@ -33,15 +44,23 @@ type ParseStats = {
   ids: Set<string>;
 };
 
-export function designStorageKey(projectPath: string): string {
+export function designSetStorageKey(projectPath: string): string {
   return `${STORAGE_PREFIX}${encodeURIComponent(projectPath)}`;
 }
 
-export function serializeDesign(root: CanvasNode): string {
-  return JSON.stringify({ version: DESIGN_VERSION, root });
+export function legacyDesignStorageKey(projectPath: string): string {
+  return `${LEGACY_STORAGE_PREFIX}${encodeURIComponent(projectPath)}`;
 }
 
-export function parseDesign(raw: string): CanvasNode | null {
+export function serializeDesignSet(set: DesignSet): string {
+  return JSON.stringify({
+    version: DESIGN_VERSION,
+    activeId: set.activeId,
+    canvases: set.canvases.map(({ id, name, root }) => ({ id, name, root })),
+  });
+}
+
+export function parseDesignSet(raw: string): DesignSet | null {
   let payload: unknown;
 
   try {
@@ -50,7 +69,134 @@ export function parseDesign(raw: string): CanvasNode | null {
     return null;
   }
 
-  if (!isRecord(payload) || payload.version !== DESIGN_VERSION) {
+  if (
+    !isRecord(payload) ||
+    payload.version !== DESIGN_VERSION ||
+    typeof payload.activeId !== "string" ||
+    !Array.isArray(payload.canvases) ||
+    payload.canvases.length < 1 ||
+    payload.canvases.length > MAX_CANVASES
+  ) {
+    return null;
+  }
+
+  const canvases: DesignCanvas[] = [];
+  const ids = new Set<string>();
+  const names = new Set<string>();
+
+  for (const value of payload.canvases) {
+    if (!isRecord(value)) {
+      return null;
+    }
+
+    const { id, name } = value;
+
+    if (!isValidCanvasId(id) || ids.has(id)) {
+      return null;
+    }
+
+    if (!isValidCanvasName(name) || names.has(name.toLowerCase())) {
+      return null;
+    }
+
+    const stats: ParseStats = { count: 0, ids: new Set() };
+    const root = parseNode(value.root, 0, stats);
+
+    if (!root || root.kind !== "screen") {
+      return null;
+    }
+
+    ids.add(id);
+    names.add(name.toLowerCase());
+    canvases.push({ id, name, root });
+  }
+
+  if (!ids.has(payload.activeId)) {
+    return null;
+  }
+
+  return { canvases, activeId: payload.activeId };
+}
+
+export function loadDesignSet(projectPath: string): DesignSetLoadResult {
+  let rawSet: string | null;
+  let rawLegacy: string | null;
+
+  try {
+    rawSet = window.localStorage.getItem(designSetStorageKey(projectPath));
+    rawLegacy = window.localStorage.getItem(legacyDesignStorageKey(projectPath));
+  } catch {
+    return { status: "unavailable", set: createCanvasSet() };
+  }
+
+  if (rawSet !== null) {
+    const set = parseDesignSet(rawSet);
+
+    if (set) {
+      adoptLoadedDesignSet(set);
+      return { status: "restored", set };
+    }
+  }
+
+  if (rawLegacy !== null) {
+    const root = parseLegacyDesign(rawLegacy);
+
+    if (!root) {
+      return { status: "invalid", set: createCanvasSet() };
+    }
+
+    adoptWidgetIds(root);
+    const canvas: DesignCanvas = { id: "canvas-1", name: "Main", root };
+    const set: DesignSet = { canvases: [canvas], activeId: canvas.id };
+    adoptCanvasIds(set);
+
+    return { status: "migrated", set };
+  }
+
+  return { status: rawSet !== null ? "invalid" : "missing", set: createCanvasSet() };
+}
+
+export function saveDesignSet(projectPath: string, set: DesignSet): boolean {
+  const serialized = serializeDesignSet(set);
+
+  if (parseDesignSet(serialized) === null) {
+    return false;
+  }
+
+  try {
+    window.localStorage.setItem(designSetStorageKey(projectPath), serialized);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearLegacyDesign(projectPath: string): void {
+  try {
+    window.localStorage.removeItem(legacyDesignStorageKey(projectPath));
+  } catch {
+    // Storage is unavailable; the migration payload cannot be cleaned up.
+  }
+}
+
+function adoptLoadedDesignSet(set: DesignSet): void {
+  for (const canvas of set.canvases) {
+    adoptWidgetIds(canvas.root);
+  }
+
+  adoptCanvasIds(set);
+}
+
+function parseLegacyDesign(raw: string): CanvasNode | null {
+  let payload: unknown;
+
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  if (!isRecord(payload) || payload.version !== LEGACY_DESIGN_VERSION) {
     return null;
   }
 
@@ -62,44 +208,6 @@ export function parseDesign(raw: string): CanvasNode | null {
   }
 
   return root;
-}
-
-export function loadDesign(projectPath: string): DesignLoadResult {
-  let raw: string | null;
-
-  try {
-    raw = window.localStorage.getItem(designStorageKey(projectPath));
-  } catch {
-    return { status: "unavailable", root: null };
-  }
-
-  if (raw === null) {
-    return { status: "missing", root: null };
-  }
-
-  const root = parseDesign(raw);
-
-  if (!root) {
-    return { status: "invalid", root: null };
-  }
-
-  adoptWidgetIds(root);
-  return { status: "restored", root };
-}
-
-export function saveDesign(projectPath: string, root: CanvasNode): boolean {
-  const serialized = serializeDesign(root);
-
-  if (parseDesign(serialized) === null) {
-    return false;
-  }
-
-  try {
-    window.localStorage.setItem(designStorageKey(projectPath), serialized);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function parseNode(value: unknown, depth: number, stats: ParseStats): CanvasNode | null {

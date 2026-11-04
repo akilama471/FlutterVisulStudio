@@ -1,7 +1,12 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { designStorageKey, loadDesign, saveDesign } from "../features/canvas/designStorage";
+import { createCanvasSet, replaceCanvasRoot } from "../features/canvas/designSet";
+import {
+  designSetStorageKey,
+  loadDesignSet,
+  saveDesignSet,
+} from "../features/canvas/designStorage";
 import { createWidget, type CanvasNode } from "../features/canvas/model";
 import { DesignSurface } from "./DesignSurface";
 
@@ -23,17 +28,25 @@ function designWithText(content: string): CanvasNode {
   return screen;
 }
 
-function firstTextContent(root: CanvasNode | null): string | null {
-  if (!root) {
-    return null;
-  }
+function seedDesign(root: CanvasNode) {
+  const set = createCanvasSet();
+  expect(saveDesignSet(PROJECT.path, replaceCanvasRoot(set, set.activeId, root))).toBe(true);
+}
 
+function firstTextContent(projectPath: string): string | null {
+  const { set } = loadDesignSet(projectPath);
+  const canvas = set.canvases.find((entry) => entry.id === set.activeId) ?? set.canvases[0];
+
+  return canvas ? findFirstText(canvas.root) : null;
+}
+
+function findFirstText(root: CanvasNode): string | null {
   if (root.kind === "text") {
     return root.props.content;
   }
 
   for (const child of root.children) {
-    const content = firstTextContent(child);
+    const content = findFirstText(child);
     if (content !== null) {
       return content;
     }
@@ -57,7 +70,7 @@ describe("DesignSurface", () => {
   });
 
   it("restores a saved design when the surface mounts", async () => {
-    saveDesign(PROJECT.path, designWithText("Restored heading"));
+    seedDesign(designWithText("Restored heading"));
     renderSurface();
 
     expect(screen.getByRole("treeitem", { name: 'Text "Restored heading"' })).toBeInTheDocument();
@@ -68,7 +81,7 @@ describe("DesignSurface", () => {
   });
 
   it("falls back to the starter design when the saved payload is invalid", () => {
-    window.localStorage.setItem(designStorageKey(PROJECT.path), "{");
+    window.localStorage.setItem(designSetStorageKey(PROJECT.path), "{");
 
     renderSurface();
 
@@ -85,7 +98,7 @@ describe("DesignSurface", () => {
     await user.type(content, "Persisted heading");
 
     await waitFor(() => {
-      expect(firstTextContent(loadDesign(PROJECT.path).root)).toBe("Persisted heading");
+      expect(firstTextContent(PROJECT.path)).toBe("Persisted heading");
     });
     expect(await screen.findByText("Saved locally")).toBeInTheDocument();
   });

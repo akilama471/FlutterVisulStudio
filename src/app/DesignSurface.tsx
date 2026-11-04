@@ -3,13 +3,14 @@ import { EditorArea, type EditorTab } from "../features/editor/EditorArea";
 import { InspectorPanel } from "../features/inspector/InspectorPanel";
 import { CanvasInspector } from "../features/canvas/CanvasInspector";
 import { CanvasWorkspace } from "../features/canvas/CanvasWorkspace";
+import { canvasReducer, type CanvasNode, type CanvasState } from "../features/canvas/model";
 import {
-  canvasReducer,
-  createInitialCanvasState,
-  type CanvasNode,
-  type CanvasState,
-} from "../features/canvas/model";
-import { loadDesign, saveDesign, type DesignSaveStatus } from "../features/canvas/designStorage";
+  clearLegacyDesign,
+  loadDesignSet,
+  saveDesignSet,
+  type DesignSaveStatus,
+} from "../features/canvas/designStorage";
+import { findCanvas, replaceCanvasRoot } from "../features/canvas/designSet";
 import { DartPreview } from "../features/dart/DartPreview";
 import { generateDart } from "../features/dart/generateDart";
 import type { ProjectInfo } from "../shared/lib/project";
@@ -29,15 +30,24 @@ type DesignSurfaceProps = {
 };
 
 export function DesignSurface({ project, showInspector }: DesignSurfaceProps) {
-  const [initial] = useState(() => loadDesign(project.path));
-  const [canvas, dispatch] = useReducer(canvasReducer, initial.root, (savedRoot): CanvasState =>
-    savedRoot
-      ? { root: savedRoot, selectedId: null, past: [], future: [], coalesceKey: null }
-      : createInitialCanvasState(),
+  const [initial] = useState(() => loadDesignSet(project.path));
+  const [activeCanvas] = useState(
+    () => findCanvas(initial.set, initial.set.activeId) ?? initial.set.canvases[0],
+  );
+  const [canvas, dispatch] = useReducer(
+    canvasReducer,
+    activeCanvas.root,
+    (savedRoot): CanvasState => ({
+      root: savedRoot,
+      selectedId: null,
+      past: [],
+      future: [],
+      coalesceKey: null,
+    }),
   );
   const [view, setView] = useState<DesignView>("canvas");
   const [savedRoot, setSavedRoot] = useState<CanvasNode | null>(() =>
-    initial.status === "restored" ? initial.root : null,
+    initial.status === "restored" ? activeCanvas.root : null,
   );
   const [failedRoot, setFailedRoot] = useState<CanvasNode | null>(null);
   const saveStatus: DesignSaveStatus =
@@ -46,7 +56,12 @@ export function DesignSurface({ project, showInspector }: DesignSurfaceProps) {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      if (saveDesign(project.path, canvas.root)) {
+      const nextSet = replaceCanvasRoot(initial.set, activeCanvas.id, canvas.root);
+
+      if (saveDesignSet(project.path, nextSet)) {
+        if (initial.status === "migrated") {
+          clearLegacyDesign(project.path);
+        }
         setFailedRoot(null);
         setSavedRoot(canvas.root);
       } else {
@@ -55,7 +70,7 @@ export function DesignSurface({ project, showInspector }: DesignSurfaceProps) {
     }, AUTOSAVE_DELAY);
 
     return () => window.clearTimeout(timer);
-  }, [canvas.root, project.path]);
+  }, [activeCanvas.id, canvas.root, initial, project.path]);
 
   function selectView(id: string) {
     setView(id === "dart" ? "dart" : "canvas");
