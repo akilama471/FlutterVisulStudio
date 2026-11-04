@@ -1,7 +1,12 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createCanvasSet, replaceCanvasRoot } from "../features/canvas/designSet";
+import { CanvasList } from "../features/canvas/CanvasList";
+import {
+  createCanvasSet,
+  createDesignCanvas,
+  replaceCanvasRoot,
+} from "../features/canvas/designSet";
 import {
   designSetStorageKey,
   loadDesignSet,
@@ -23,6 +28,35 @@ function renderSurface() {
       <DesignSurface project={PROJECT} showInspector />
     </DesignWorkspaceProvider>,
   );
+}
+
+function renderWorkspace() {
+  return render(
+    <DesignWorkspaceProvider project={PROJECT}>
+      <CanvasList />
+      <DesignSurface project={PROJECT} showInspector />
+    </DesignWorkspaceProvider>,
+  );
+}
+
+function seedTwoCanvases() {
+  const set = createCanvasSet();
+  const first = {
+    ...set.canvases[0],
+    root: designWithText("First canvas"),
+  };
+  const second = createDesignCanvas("Canvas 2", designWithText("Second canvas"));
+
+  expect(saveDesignSet(PROJECT.path, { canvases: [first, second], activeId: second.id })).toBe(
+    true,
+  );
+}
+
+function loadedCanvasText(name: string): string | null {
+  const { set } = loadDesignSet(PROJECT.path);
+  const canvas = set.canvases.find((entry) => entry.name === name);
+
+  return canvas ? findFirstText(canvas.root) : null;
 }
 
 function designWithText(content: string): CanvasNode {
@@ -357,5 +391,99 @@ describe("DesignSurface", () => {
 
     await user.click(screen.getByRole("treeitem", { name: "Screen" }));
     expect(remove).toBeDisabled();
+  });
+
+  it("undoes and redoes widget changes with the header buttons", async () => {
+    const user = userEvent.setup();
+    renderSurface();
+
+    const undo = screen.getByRole("button", { name: "Undo" });
+    const redo = screen.getByRole("button", { name: "Redo" });
+    expect(undo).toBeDisabled();
+    expect(redo).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Add Container" }));
+    expect(screen.getByRole("treeitem", { name: "Container" })).toBeInTheDocument();
+    expect(undo).toBeEnabled();
+    expect(redo).toBeDisabled();
+
+    await user.click(undo);
+    expect(screen.queryByRole("treeitem", { name: "Container" })).not.toBeInTheDocument();
+    expect(redo).toBeEnabled();
+
+    await user.click(redo);
+    expect(screen.getByRole("treeitem", { name: "Container" })).toBeInTheDocument();
+    expect(redo).toBeDisabled();
+  });
+
+  it("undoes and redoes with keyboard shortcuts", async () => {
+    const user = userEvent.setup();
+    renderSurface();
+
+    await user.click(screen.getByRole("button", { name: "Add Text" }));
+    expect(screen.getByRole("treeitem", { name: 'Text "Text"' })).toBeInTheDocument();
+
+    await user.keyboard("{Control>}z{/Control}");
+    expect(screen.queryByRole("treeitem", { name: 'Text "Text"' })).not.toBeInTheDocument();
+
+    await user.keyboard("{Control>}{Shift>}z{/Shift}{/Control}");
+    expect(screen.getByRole("treeitem", { name: 'Text "Text"' })).toBeInTheDocument();
+
+    await user.keyboard("{Control>}z{/Control}");
+    await user.keyboard("{Control>}y{/Control}");
+    expect(screen.getByRole("treeitem", { name: 'Text "Text"' })).toBeInTheDocument();
+  });
+
+  it("autosaves an undone edit", async () => {
+    const user = userEvent.setup();
+    renderSurface();
+
+    await user.click(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' }));
+    const content = screen.getByLabelText("Content");
+    await user.clear(content);
+    await user.type(content, "Undo me");
+
+    await waitFor(() => expect(firstTextContent(PROJECT.path)).toBe("Undo me"));
+    expect(await screen.findByText("Saved locally")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+
+    expect(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' })).toBeInTheDocument();
+    await waitFor(() => expect(firstTextContent(PROJECT.path)).toBe("Hello, Flutter!"));
+  });
+
+  it("keeps separate designs per canvas", async () => {
+    const user = userEvent.setup();
+    seedTwoCanvases();
+    renderWorkspace();
+
+    expect(screen.getByRole("treeitem", { name: 'Text "Second canvas"' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Canvas 1" }));
+    expect(screen.getByRole("treeitem", { name: 'Text "First canvas"' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Canvas 2" }));
+    expect(screen.getByRole("treeitem", { name: 'Text "Second canvas"' })).toBeInTheDocument();
+  });
+
+  it("edits one canvas without changing the other", async () => {
+    const user = userEvent.setup();
+    seedTwoCanvases();
+    renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: "Canvas 1" }));
+    await user.click(screen.getByRole("treeitem", { name: 'Text "First canvas"' }));
+    const content = screen.getByLabelText("Content");
+    await user.clear(content);
+    await user.type(content, "Edited first");
+
+    await user.click(screen.getByRole("button", { name: "Canvas 2" }));
+    expect(screen.getByRole("treeitem", { name: 'Text "Second canvas"' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Canvas 1" }));
+    expect(screen.getByRole("treeitem", { name: 'Text "Edited first"' })).toBeInTheDocument();
+
+    await waitFor(() => expect(loadedCanvasText("Canvas 1")).toBe("Edited first"));
+    expect(loadedCanvasText("Canvas 2")).toBe("Second canvas");
   });
 });
