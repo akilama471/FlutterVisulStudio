@@ -12,6 +12,7 @@ const plannedCapabilities = [
   { icon: "layers", label: "Multiple canvases" },
   { icon: "undo", label: "Undo and redo" },
   { icon: "file", label: "Project file editing" },
+  { icon: "layers", label: "Drag, drop, and multi-select" },
 ] as const;
 
 type EditorWelcomeProps = {
@@ -48,8 +49,9 @@ export function EditorWelcome({ status, onOpenProject }: EditorWelcomeProps) {
           </Button>
         </div>
         <p className="welcome__note">
-          Phase 8 lets you open, edit, and save project text files beside the canvas, with explicit
-          saves, backups, and external-change protection. Open a project to start composing.
+          Phase 9 completes the canvas editing model: drag widgets between containers, select and
+          edit several at once, copy and paste across canvases, and rely on undo history that
+          survives restarts. Open a project to start composing.
         </p>
       </div>
     </section>
