@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef } from "react";
 import { EditorArea, type EditorTab } from "../features/editor/EditorArea";
 import { InspectorPanel } from "../features/inspector/InspectorPanel";
 import { CanvasInspector } from "../features/canvas/CanvasInspector";
@@ -9,14 +9,15 @@ import { useDesignWorkspace } from "../features/canvas/designWorkspaceContext";
 import { canvasReducer, type CanvasNode, type CanvasState } from "../features/canvas/model";
 import { DartPreview } from "../features/dart/DartPreview";
 import { generateDart } from "../features/dart/generateDart";
+import { FileEditor } from "../features/files/FileEditor";
+import { FileInspector } from "../features/files/FileInspector";
+import { fileName, fileTabId, useFileWorkspace } from "../features/files/fileWorkspaceContext";
 import type { ProjectInfo } from "../shared/lib/project";
 
 const DESIGN_TABS: EditorTab[] = [
   { id: "canvas", label: "Canvas", icon: "grid" },
   { id: "dart", label: "Dart", icon: "code" },
 ];
-
-type DesignView = "canvas" | "dart";
 
 type DesignSurfaceProps = {
   project: ProjectInfo;
@@ -60,9 +61,23 @@ function CanvasEditorSurface({
     future: [],
     coalesceKey: null,
   }));
-  const [view, setView] = useState<DesignView>("canvas");
+  const { activeTabId, activeFile, files, setActiveTab, requestCloseFile } = useFileWorkspace();
   const reportedRoot = useRef(canvas.root);
   const code = useMemo(() => generateDart(state.root), [state.root]);
+  const tabs = useMemo<EditorTab[]>(
+    () => [
+      ...DESIGN_TABS,
+      ...files.map((file) => ({
+        id: fileTabId(file.relativePath),
+        label: fileName(file.relativePath),
+        icon: "file" as const,
+        closable: true,
+        dirty: file.contents !== file.savedContents,
+        onClose: () => requestCloseFile(file.relativePath),
+      })),
+    ],
+    [files, requestCloseFile],
+  );
 
   useEffect(() => {
     if (state.root === reportedRoot.current) {
@@ -110,13 +125,17 @@ function CanvasEditorSurface({
   }, []);
 
   function selectView(id: string) {
-    setView(id === "dart" ? "dart" : "canvas");
+    setActiveTab(id);
   }
 
   return (
     <>
-      <EditorArea tabs={DESIGN_TABS} activeTabId={view} onSelectTab={selectView}>
-        {view === "canvas" ? (
+      <EditorArea tabs={tabs} activeTabId={activeTabId} onSelectTab={selectView}>
+        {activeTabId === "dart" ? (
+          <DartPreview code={code} project={project} />
+        ) : activeFile ? (
+          <FileEditor file={activeFile} />
+        ) : (
           <CanvasWorkspace
             canvas={state}
             dispatch={dispatch}
@@ -126,13 +145,15 @@ function CanvasEditorSurface({
             canUndo={state.past.length > 0}
             canRedo={state.future.length > 0}
           />
-        ) : (
-          <DartPreview code={code} project={project} />
         )}
       </EditorArea>
       {showInspector ? (
         <InspectorPanel>
-          <CanvasInspector canvas={state} dispatch={dispatch} />
+          {activeFile ? (
+            <FileInspector file={activeFile} />
+          ) : (
+            <CanvasInspector canvas={state} dispatch={dispatch} />
+          )}
         </InspectorPanel>
       ) : null}
     </>

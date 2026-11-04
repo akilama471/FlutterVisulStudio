@@ -22,6 +22,26 @@ export type ProjectWriteResult = {
   bytes: number;
 };
 
+export type ProjectTextFile = {
+  relativePath: string;
+  contents: string;
+  bytes: number;
+  modifiedMs: number;
+};
+
+export type ProjectTextFileStat = {
+  relativePath: string;
+  bytes: number;
+  modifiedMs: number;
+};
+
+export type ProjectTextWriteResult = {
+  relativePath: string;
+  backupPath: string | null;
+  bytes: number;
+  modifiedMs: number;
+};
+
 export class ProjectError extends Error {
   constructor(message: string) {
     super(message);
@@ -74,6 +94,51 @@ function isProjectWriteResult(value: unknown): value is ProjectWriteResult {
     typeof value.bytes === "number" &&
     Number.isInteger(value.bytes) &&
     value.bytes >= 0
+  );
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
+function isProjectTextFile(value: unknown): value is ProjectTextFile {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.relativePath === "string" &&
+    value.relativePath.length > 0 &&
+    typeof value.contents === "string" &&
+    isNonNegativeInteger(value.bytes) &&
+    isNonNegativeInteger(value.modifiedMs)
+  );
+}
+
+function isProjectTextFileStat(value: unknown): value is ProjectTextFileStat {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.relativePath === "string" &&
+    value.relativePath.length > 0 &&
+    isNonNegativeInteger(value.bytes) &&
+    isNonNegativeInteger(value.modifiedMs)
+  );
+}
+
+function isProjectTextWriteResult(value: unknown): value is ProjectTextWriteResult {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.relativePath === "string" &&
+    value.relativePath.length > 0 &&
+    (value.backupPath === null || typeof value.backupPath === "string") &&
+    isNonNegativeInteger(value.bytes) &&
+    isNonNegativeInteger(value.modifiedMs)
   );
 }
 
@@ -182,5 +247,67 @@ export async function writeProjectFile(
     }
 
     throw new ProjectError(projectErrorMessage(error, "The project file could not be written."));
+  }
+}
+
+export async function readProjectTextFile(relativePath: string): Promise<ProjectTextFile> {
+  try {
+    const result: unknown = await invoke("read_project_text_file", { relativePath });
+
+    if (!isProjectTextFile(result)) {
+      throw new ProjectError("The file could not be read.");
+    }
+
+    return result;
+  } catch (error) {
+    if (error instanceof ProjectError) {
+      throw error;
+    }
+
+    throw new ProjectError(projectErrorMessage(error, "The file could not be read."));
+  }
+}
+
+export async function statProjectTextFile(relativePath: string): Promise<ProjectTextFileStat> {
+  try {
+    const result: unknown = await invoke("stat_project_text_file", { relativePath });
+
+    if (!isProjectTextFileStat(result)) {
+      throw new ProjectError("The file could not be inspected.");
+    }
+
+    return result;
+  } catch (error) {
+    if (error instanceof ProjectError) {
+      throw error;
+    }
+
+    throw new ProjectError(projectErrorMessage(error, "The file could not be inspected."));
+  }
+}
+
+export async function writeProjectTextFile(
+  relativePath: string,
+  contents: string,
+  expectedModifiedMs: number | null,
+): Promise<ProjectTextWriteResult> {
+  try {
+    const result: unknown = await invoke("write_project_text_file", {
+      relativePath,
+      contents,
+      expectedModifiedMs,
+    });
+
+    if (!isProjectTextWriteResult(result)) {
+      throw new ProjectError("The file could not be written.");
+    }
+
+    return result;
+  } catch (error) {
+    if (error instanceof ProjectError) {
+      throw error;
+    }
+
+    throw new ProjectError(projectErrorMessage(error, "The file could not be written."));
   }
 }

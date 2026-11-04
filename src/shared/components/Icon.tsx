@@ -11,6 +11,7 @@ export type IconName =
   | "layers"
   | "pencil"
   | "plus"
+  | "refresh"
   | "redo"
   | "row"
   | "sliders"
@@ -67,6 +68,12 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <path d="M12 5v14" />
       <path d="M5 12h14" />
+    </>
+  ),
+  refresh: (
+    <>
+      <path d="M20 11a8 8 0 1 0-2.34 6.34" />
+      <path d="M20 4v7h-7" />
     </>
   ),
   pencil: (

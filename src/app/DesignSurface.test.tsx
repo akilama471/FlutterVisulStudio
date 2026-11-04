@@ -14,6 +14,7 @@ import {
 } from "../features/canvas/designStorage";
 import { createWidget, type CanvasNode } from "../features/canvas/model";
 import { DesignWorkspaceProvider } from "../features/canvas/DesignWorkspaceProvider";
+import { FileWorkspaceProvider } from "../features/files/FileWorkspaceProvider";
 import { DesignSurface } from "./DesignSurface";
 
 const PROJECT = {
@@ -25,7 +26,9 @@ const PROJECT = {
 function renderSurface() {
   return render(
     <DesignWorkspaceProvider project={PROJECT}>
-      <DesignSurface project={PROJECT} showInspector />
+      <FileWorkspaceProvider>
+        <DesignSurface project={PROJECT} showInspector />
+      </FileWorkspaceProvider>
     </DesignWorkspaceProvider>,
   );
 }
@@ -33,8 +36,10 @@ function renderSurface() {
 function renderWorkspace() {
   return render(
     <DesignWorkspaceProvider project={PROJECT}>
-      <CanvasList />
-      <DesignSurface project={PROJECT} showInspector />
+      <FileWorkspaceProvider>
+        <CanvasList />
+        <DesignSurface project={PROJECT} showInspector />
+      </FileWorkspaceProvider>
     </DesignWorkspaceProvider>,
   );
 }
