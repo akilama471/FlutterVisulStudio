@@ -7,7 +7,7 @@ use std::{
 };
 use tauri::State;
 
-const IGNORED_DIRECTORIES: &[&str] = &[".git", ".dart_tool", "build"];
+const IGNORED_DIRECTORIES: &[&str] = &[".git", ".dart_tool", ".flutter-ui-studio", "build"];
 const NO_PROJECT_ERROR: &str = "No project is open.";
 const NOT_FLUTTER_ERROR: &str =
     "That folder is not a Flutter project (pubspec.yaml was not found).";
@@ -27,6 +27,16 @@ const MAX_FILE_BYTES: usize = 1024 * 1024;
 #[derive(Default)]
 pub struct ProjectState {
     root: Mutex<Option<PathBuf>>,
+}
+
+impl ProjectState {
+    pub(crate) fn active_root(&self) -> Result<PathBuf, String> {
+        self.root
+            .lock()
+            .map_err(|_| "The project state is unavailable.".to_owned())?
+            .clone()
+            .ok_or_else(|| NO_PROJECT_ERROR.to_owned())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -854,6 +864,7 @@ mod tests {
         project.write("README.md", "# Fixture\n");
         project.create_dir(".git/objects");
         project.create_dir(".dart_tool/package_config");
+        project.create_dir(".flutter-ui-studio/data");
         project.create_dir("build/output");
 
         let entries = list_directory(

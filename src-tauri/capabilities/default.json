@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Minimum permissions required by the application shell and project picker.",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:allow-open"]
+  "permissions": ["core:default", "dialog:allow-open", "dialog:allow-save"]
 }

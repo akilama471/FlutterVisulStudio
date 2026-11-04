@@ -66,6 +66,12 @@ export function designSetBytes(set: DesignSet): number {
   return new TextEncoder().encode(serializeDesignSet(set)).length;
 }
 
+export function canvasDesignBytes(canvas: DesignCanvas): number {
+  return new TextEncoder().encode(
+    JSON.stringify({ id: canvas.id, name: canvas.name, root: canvas.root }),
+  ).length;
+}
+
 export function parseDesignSet(raw: string): DesignSet | null {
   let payload: unknown;
 
