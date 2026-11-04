@@ -3,9 +3,11 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CanvasList } from "./CanvasList";
 import { CanvasUndoToast } from "./CanvasUndoToast";
-import { loadDesignSet } from "./designStorage";
+import { createCanvasSet } from "./designSet";
+import { loadDesignSet, saveDesignSet } from "./designStorage";
 import { DesignWorkspaceProvider } from "./DesignWorkspaceProvider";
 import { useDesignWorkspace } from "./designWorkspaceContext";
+import { createWidget } from "./model";
 
 const PROJECT = {
   name: "demo_app",
@@ -247,6 +249,18 @@ describe("CanvasList", () => {
       const names = loadDesignSet(PROJECT.path).set.canvases.map((canvas) => canvas.name);
       expect(names).toEqual(["Canvas 1", "Canvas 2", "Canvas 3"]);
     });
+  });
+
+  it("warns when the saved design approaches the storage limit", () => {
+    const set = createCanvasSet();
+    set.canvases[0].root.children[0].children = Array.from({ length: 120 }, () =>
+      createWidget("text", { content: "x".repeat(10_000) }),
+    );
+    expect(saveDesignSet(PROJECT.path, set)).toBe(true);
+
+    renderList();
+
+    expect(screen.getByText(/Design data is 1\.\d MB/)).toBeInTheDocument();
   });
 
   it("disables deleting the last canvas", () => {

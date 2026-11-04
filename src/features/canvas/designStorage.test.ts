@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createCanvasSet, createDesignCanvas, MAX_CANVASES, type DesignSet } from "./designSet";
 import {
   clearLegacyDesign,
+  designSetBytes,
   designSetStorageKey,
   legacyDesignStorageKey,
   loadDesignSet,
+  MAX_DESIGN_BYTES_WARNING,
   parseDesignSet,
   saveDesignSet,
   serializeDesignSet,
@@ -74,6 +76,16 @@ describe("design set storage", () => {
     const set = twoCanvasSet();
 
     expect(parseDesignSet(serializeDesignSet(set))).toEqual(set);
+  });
+
+  it("measures the serialized set in UTF-8 bytes", () => {
+    const set = twoCanvasSet();
+    const larger = twoCanvasSet();
+    larger.canvases[0].root.children[0].children[0].props.content = "x".repeat(2_000);
+
+    expect(designSetBytes(set)).toBe(new TextEncoder().encode(serializeDesignSet(set)).length);
+    expect(designSetBytes(larger)).toBeGreaterThan(designSetBytes(set));
+    expect(MAX_DESIGN_BYTES_WARNING).toBe(1024 * 1024);
   });
 
   it("reports a missing set with a starter canvas", () => {

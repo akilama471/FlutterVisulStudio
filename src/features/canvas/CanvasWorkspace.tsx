@@ -80,7 +80,11 @@ export function CanvasWorkspace({
             className={`canvas-save canvas-save--${saveStatus}`}
             role="status"
             aria-live="polite"
-            title="Designs are stored in this application's local storage."
+            title={
+              saveStatus === "error"
+                ? "The design could not be saved. Browser storage may be full or unavailable."
+                : "Designs are stored in this application's local storage."
+            }
           >
             <span className="canvas-save__dot" aria-hidden="true" />
             {SAVE_LABELS[saveStatus]}

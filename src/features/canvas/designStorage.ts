@@ -21,6 +21,8 @@ const MAX_COLOR_LENGTH = 64;
 const MAX_GAP = 64;
 const MAX_PADDING = 96;
 
+export const MAX_DESIGN_BYTES_WARNING = 1024 * 1024;
+
 const WIDGET_KINDS: readonly WidgetKind[] = [
   "screen",
   "column",
@@ -58,6 +60,10 @@ export function serializeDesignSet(set: DesignSet): string {
     activeId: set.activeId,
     canvases: set.canvases.map(({ id, name, root }) => ({ id, name, root })),
   });
+}
+
+export function designSetBytes(set: DesignSet): number {
+  return new TextEncoder().encode(serializeDesignSet(set)).length;
 }
 
 export function parseDesignSet(raw: string): DesignSet | null {

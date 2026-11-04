@@ -142,13 +142,28 @@ describe("DesignSurface", () => {
     expect(await screen.findByText("Saved locally")).toBeInTheDocument();
   });
 
+  it("flushes a pending edit when the page hides", async () => {
+    const user = userEvent.setup();
+    renderSurface();
+
+    await user.click(screen.getByRole("treeitem", { name: 'Text "Hello, Flutter!"' }));
+    const content = screen.getByLabelText("Content");
+    await user.clear(content);
+    await user.type(content, "Hidden save");
+
+    window.dispatchEvent(new Event("pagehide"));
+
+    expect(firstTextContent(PROJECT.path)).toBe("Hidden save");
+  });
+
   it("shows a save failure when local storage rejects the write", async () => {
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("QuotaExceededError");
     });
     renderSurface();
 
-    expect(await screen.findByText("Save failed")).toBeInTheDocument();
+    const failure = await screen.findByText("Save failed");
+    expect(failure).toHaveAttribute("title", expect.stringMatching(/storage/i));
   });
 
   it("renders generated Dart for the current canvas", async () => {

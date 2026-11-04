@@ -13,7 +13,9 @@ import {
 } from "./designSet";
 import {
   clearLegacyDesign,
+  designSetBytes,
   loadDesignSet,
+  MAX_DESIGN_BYTES_WARNING,
   saveDesignSet,
   type DesignSaveStatus,
 } from "./designStorage";
@@ -28,6 +30,7 @@ type WorkspaceState = {
   status: DesignSaveStatus;
   legacy: boolean;
   deleted: RemovedCanvas[];
+  bytes: number;
 };
 
 type DesignWorkspaceProviderProps = {
@@ -43,6 +46,7 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
     status: initial.status === "restored" ? "saved" : "saving",
     legacy: initial.status === "migrated",
     deleted: [],
+    bytes: designSetBytes(initial.set),
   }));
   const stateRef = useRef(state);
 
@@ -56,7 +60,9 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
     }
 
     const timer = window.setTimeout(() => {
-      if (saveDesignSet(project.path, stateRef.current.set)) {
+      const set = stateRef.current.set;
+
+      if (saveDesignSet(project.path, set)) {
         if (stateRef.current.legacy) {
           clearLegacyDesign(project.path);
         }
@@ -65,6 +71,7 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
           dirty: false,
           status: "saved",
           legacy: false,
+          bytes: designSetBytes(set),
         }));
       } else {
         setState((current) => ({ ...current, status: "error" }));
@@ -75,16 +82,36 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
   }, [project.path, state.dirty, state.set]);
 
   useEffect(() => {
-    return () => {
+    function flush() {
       const current = stateRef.current;
 
       if (!current.dirty) {
         return;
       }
 
-      if (saveDesignSet(project.path, current.set) && current.legacy) {
-        clearLegacyDesign(project.path);
+      const set = current.set;
+
+      if (saveDesignSet(project.path, set)) {
+        if (current.legacy) {
+          clearLegacyDesign(project.path);
+        }
+        stateRef.current = {
+          ...current,
+          dirty: false,
+          status: "saved",
+          legacy: false,
+          bytes: designSetBytes(set),
+        };
       }
+    }
+
+    window.addEventListener("pagehide", flush);
+    window.addEventListener("beforeunload", flush);
+
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      window.removeEventListener("beforeunload", flush);
+      flush();
     };
   }, [project.path]);
 
@@ -194,6 +221,8 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
       canDeleteCanvas: state.set.canvases.length > 1,
       atCanvasLimit: state.set.canvases.length >= MAX_CANVASES,
       deletedCanvases: state.deleted,
+      storageBytes: state.bytes,
+      storageWarning: state.bytes >= MAX_DESIGN_BYTES_WARNING,
       createCanvas,
       selectCanvas: selectCanvasInSet,
       renameCanvas,
@@ -212,6 +241,7 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
       state.deleted,
       state.set,
       state.status,
+      state.bytes,
       undoDelete,
       updateCanvasRoot,
     ],

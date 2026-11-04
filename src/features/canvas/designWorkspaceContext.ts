@@ -11,6 +11,8 @@ export type DesignWorkspace = {
   canDeleteCanvas: boolean;
   atCanvasLimit: boolean;
   deletedCanvases: readonly RemovedCanvas[];
+  storageBytes: number;
+  storageWarning: boolean;
   createCanvas: () => void;
   selectCanvas: (id: string) => void;
   renameCanvas: (id: string, name: string) => void;

@@ -441,6 +441,13 @@ ul {
   font-size: 10.5px;
 }
 
+.canvas-list__warning {
+  padding: 5px 14px 0;
+  color: #e0b15a;
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
 .panel-alert {
   margin: 10px 12px;
   padding: 8px 10px;

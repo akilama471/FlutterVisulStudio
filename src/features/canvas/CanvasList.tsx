@@ -18,12 +18,15 @@ export function CanvasList() {
     activeId,
     canDeleteCanvas,
     atCanvasLimit,
+    storageBytes,
+    storageWarning,
     createCanvas,
     selectCanvas,
     deleteCanvas,
   } = useDesignWorkspace();
   const [pendingDelete, setPendingDelete] = useState<DesignCanvas | null>(null);
   const [pendingRename, setPendingRename] = useState<DesignCanvas | null>(null);
+  const storageMegabytes = (storageBytes / (1024 * 1024)).toFixed(1);
 
   return (
     <section className="canvas-list" aria-labelledby="canvas-list-title">
@@ -79,6 +82,13 @@ export function CanvasList() {
           );
         })}
       </ul>
+
+      {storageWarning ? (
+        <p className="canvas-list__warning">
+          Design data is {storageMegabytes} MB. Browser storage is limited; delete unused canvases
+          to free space.
+        </p>
+      ) : null}
 
       {atCanvasLimit ? (
         <p className="canvas-list__note">Limit of {MAX_CANVASES} canvases reached.</p>
