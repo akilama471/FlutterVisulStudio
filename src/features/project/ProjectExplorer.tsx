@@ -12,22 +12,42 @@ type ProjectExplorerProps = {
   status: ProjectStatus;
   error: string | null;
   onOpenProject: () => void;
+  onOpenFile?: (relativePath: string) => void;
+  onRefreshFiles?: () => void;
+  refreshToken?: number;
 };
 
-export function ProjectExplorer({ project, status, error, onOpenProject }: ProjectExplorerProps) {
+export function ProjectExplorer({
+  project,
+  status,
+  error,
+  onOpenProject,
+  onOpenFile,
+  onRefreshFiles,
+  refreshToken = 0,
+}: ProjectExplorerProps) {
   const busy = status === "restoring" || status === "opening";
 
   return (
     <aside className="side-panel side-panel--explorer" aria-label="Explorer">
       <div className="side-panel__header">
         <h2 className="side-panel__title">Explorer</h2>
-        <IconButton
-          className="side-panel__action"
-          label="Open project folder"
-          icon="folder"
-          disabled={busy}
-          onClick={onOpenProject}
-        />
+        <div className="side-panel__actions">
+          <IconButton
+            className="side-panel__action"
+            label="Refresh project files"
+            icon="refresh"
+            disabled={busy || !project}
+            onClick={onRefreshFiles}
+          />
+          <IconButton
+            className="side-panel__action"
+            label="Open project folder"
+            icon="folder"
+            disabled={busy}
+            onClick={onOpenProject}
+          />
+        </div>
       </div>
 
       <div className="side-panel__body side-panel__body--explorer">
@@ -44,7 +64,12 @@ export function ProjectExplorer({ project, status, error, onOpenProject }: Proje
               <span className="project-summary__name">{project.name}</span>
             </div>
             <CanvasList />
-            <ProjectFiles key={project.path} project={project} />
+            <ProjectFiles
+              key={project.path}
+              project={project}
+              onOpenFile={onOpenFile ?? (() => {})}
+              refreshToken={refreshToken}
+            />
           </>
         ) : status === "restoring" ? (
           <EmptyState

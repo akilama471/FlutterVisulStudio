@@ -14,9 +14,11 @@ type TreeState =
 
 type ProjectFilesProps = {
   project: ProjectInfo;
+  onOpenFile: (relativePath: string) => void;
+  refreshToken: number;
 };
 
-export function ProjectFiles({ project }: ProjectFilesProps) {
+export function ProjectFiles({ project, onOpenFile, refreshToken }: ProjectFilesProps) {
   const [tree, setTree] = useState<TreeState>({
     status: "loading",
     entries: [],
@@ -41,7 +43,7 @@ export function ProjectFiles({ project }: ProjectFilesProps) {
     return () => {
       active = false;
     };
-  }, [project.path]);
+  }, [project.path, refreshToken]);
 
   if (tree.status === "loading") {
     return <p className="panel-note">Loading project files…</p>;
@@ -59,5 +61,5 @@ export function ProjectFiles({ project }: ProjectFilesProps) {
     return <p className="panel-note">This project has no files to show.</p>;
   }
 
-  return <ProjectTree entries={tree.entries} />;
+  return <ProjectTree entries={tree.entries} onOpenFile={onOpenFile} refreshToken={refreshToken} />;
 }

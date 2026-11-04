@@ -11,6 +11,7 @@ const plannedCapabilities = [
   { icon: "sparkles", label: "Safe project writes" },
   { icon: "layers", label: "Multiple canvases" },
   { icon: "undo", label: "Undo and redo" },
+  { icon: "file", label: "Project file editing" },
 ] as const;
 
 type EditorWelcomeProps = {
@@ -47,8 +48,8 @@ export function EditorWelcome({ status, onOpenProject }: EditorWelcomeProps) {
           </Button>
         </div>
         <p className="welcome__note">
-          Phase 6 adds undo/redo and multiple canvases per project, so you can explore variations
-          before writing the generated Dart after a diff review. Open a project to start composing.
+          Phase 8 lets you open, edit, and save project text files beside the canvas, with explicit
+          saves, backups, and external-change protection. Open a project to start composing.
         </p>
       </div>
     </section>

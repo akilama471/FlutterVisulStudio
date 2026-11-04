@@ -63,7 +63,7 @@ describe("App", () => {
       screen.getByRole("heading", { level: 1, name: "Flutter UI Studio" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("contentinfo", { name: "Status bar" })).toBeInTheDocument();
-    expect(screen.getByText("Phase 6")).toBeInTheDocument();
+    expect(screen.getByText("Phase 8")).toBeInTheDocument();
     expect(
       within(screen.getByRole("complementary", { name: "Inspector" })).getByText("No project open"),
     ).toBeInTheDocument();
@@ -218,6 +218,73 @@ describe("App", () => {
     expect(screen.getByRole("treeitem", { name: 'Button "Get started"' })).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledWith("open_project", { path: PROJECT.path });
     expect(window.localStorage.getItem(RECENT_PROJECT_KEY)).toBe(PROJECT.path);
+  });
+
+  it("opens, edits, and saves a project file in a tab", async () => {
+    const user = userEvent.setup();
+    openMock.mockResolvedValue(PROJECT.path);
+    const contents = "# Demo App\n";
+    invokeMock.mockImplementation(
+      (command: string, args?: { relativePath?: string; contents?: string }) => {
+        if (command === "open_project") {
+          return Promise.resolve(PROJECT);
+        }
+        if (command === "list_project_directory") {
+          return Promise.resolve(args?.relativePath === "lib" ? LIB_ENTRIES : ROOT_ENTRIES);
+        }
+        if (command === "read_project_text_file" || command === "stat_project_text_file") {
+          return Promise.resolve({
+            relativePath: args?.relativePath,
+            contents,
+            bytes: contents.length,
+            modifiedMs: 100,
+          });
+        }
+        if (command === "write_project_text_file") {
+          return Promise.resolve({
+            relativePath: args?.relativePath,
+            backupPath: "pubspec.yaml.bak",
+            bytes: args?.contents?.length ?? 0,
+            modifiedMs: 200,
+          });
+        }
+        return Promise.reject(new Error("Tauri runtime unavailable"));
+      },
+    );
+
+    render(<App />);
+
+    const explorer = screen.getByRole("complementary", { name: "Explorer" });
+    await user.click(within(explorer).getByRole("button", { name: "Open Flutter project" }));
+
+    await user.click(await screen.findByRole("button", { name: "pubspec.yaml" }));
+
+    expect(await screen.findByRole("tab", { name: "pubspec.yaml" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    const editor = await screen.findByLabelText("Edit pubspec.yaml");
+    expect(editor).toHaveValue(contents);
+
+    await user.type(editor, "Updated");
+    const fileEditor = screen.getByRole("region", { name: "Editor for pubspec.yaml" });
+    expect(within(fileEditor).getByText("Modified")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("write_project_text_file", {
+        relativePath: "pubspec.yaml",
+        contents: `${contents}Updated`,
+        expectedModifiedMs: 100,
+      });
+    });
+    expect(await within(fileEditor).findByText("Saved")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("complementary", { name: "Inspector" })).getByRole("heading", {
+        name: "pubspec.yaml",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("clears a stale remembered project", async () => {

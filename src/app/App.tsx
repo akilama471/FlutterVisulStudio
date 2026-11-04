@@ -7,10 +7,13 @@ import { WorkbenchHeader } from "../features/editor/WorkbenchHeader";
 import { InspectorPanel } from "../features/inspector/InspectorPanel";
 import { NoProjectInspector } from "../features/canvas/CanvasInspector";
 import { ProjectExplorer } from "../features/project/ProjectExplorer";
-import { useProjectWorkspace } from "../features/project/useProjectWorkspace";
+import { useProjectWorkspace, type ProjectStatus } from "../features/project/useProjectWorkspace";
 import { DesignWorkspaceProvider } from "../features/canvas/DesignWorkspaceProvider";
 import { CanvasUndoToast } from "../features/canvas/CanvasUndoToast";
+import { FileWorkspaceProvider } from "../features/files/FileWorkspaceProvider";
+import { useFileWorkspace } from "../features/files/fileWorkspaceContext";
 import { FALLBACK_APP_INFO, getAppInfo, type AppInfo } from "../shared/lib/appInfo";
+import type { ProjectInfo } from "../shared/lib/project";
 import { DesignSurface } from "./DesignSurface";
 
 type PanelVisibility = {
@@ -53,15 +56,16 @@ export function App() {
         />
         {project ? (
           <DesignWorkspaceProvider key={project.path} project={project}>
-            {panels.explorer ? (
-              <ProjectExplorer
+            <FileWorkspaceProvider key={project.path}>
+              <ProjectWorkspace
                 project={project}
                 status={status}
                 error={error}
+                showExplorer={panels.explorer}
+                showInspector={panels.inspector}
                 onOpenProject={openProjectFromPicker}
               />
-            ) : null}
-            <DesignSurface project={project} showInspector={panels.inspector} />
+            </FileWorkspaceProvider>
             <CanvasUndoToast />
           </DesignWorkspaceProvider>
         ) : (
@@ -90,5 +94,42 @@ export function App() {
       </div>
       <StatusBar appInfo={appInfo} project={project} status={status} />
     </div>
+  );
+}
+
+type ProjectWorkspaceProps = {
+  project: ProjectInfo;
+  status: ProjectStatus;
+  error: string | null;
+  showExplorer: boolean;
+  showInspector: boolean;
+  onOpenProject: () => void;
+};
+
+function ProjectWorkspace({
+  project,
+  status,
+  error,
+  showExplorer,
+  showInspector,
+  onOpenProject,
+}: ProjectWorkspaceProps) {
+  const { openFile, refreshFiles, refreshToken } = useFileWorkspace();
+
+  return (
+    <>
+      {showExplorer ? (
+        <ProjectExplorer
+          project={project}
+          status={status}
+          error={error}
+          onOpenProject={onOpenProject}
+          onOpenFile={openFile}
+          onRefreshFiles={refreshFiles}
+          refreshToken={refreshToken}
+        />
+      ) : null}
+      <DesignSurface project={project} showInspector={showInspector} />
+    </>
   );
 }

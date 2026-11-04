@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "../../shared/components/Icon";
 import {
   listProjectDirectory,
@@ -13,14 +13,21 @@ type ChildState =
 
 type ProjectTreeProps = {
   entries: ProjectEntry[];
+  onOpenFile: (relativePath: string) => void;
+  refreshToken: number;
 };
 
-export function ProjectTree({ entries }: ProjectTreeProps) {
+export function ProjectTree({ entries, onOpenFile, refreshToken }: ProjectTreeProps) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [children, setChildren] = useState<Record<string, ChildState>>({});
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const expandedRef = useRef(expanded);
 
-  async function loadChildren(relativePath: string) {
+  useEffect(() => {
+    expandedRef.current = expanded;
+  }, [expanded]);
+
+  const loadChildren = useCallback(async (relativePath: string) => {
     setChildren((current) => ({
       ...current,
       [relativePath]: { status: "loading", entries: [] },
@@ -42,7 +49,14 @@ export function ProjectTree({ entries }: ProjectTreeProps) {
         },
       }));
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    setChildren({});
+    for (const relativePath of expandedRef.current) {
+      void loadChildren(relativePath);
+    }
+  }, [loadChildren, refreshToken]);
 
   function toggleDirectory(entry: ProjectEntry) {
     const isOpen = expanded.has(entry.relativePath);
@@ -82,9 +96,17 @@ export function ProjectTree({ entries }: ProjectTreeProps) {
                 style={{ paddingLeft: `${8 + depth * 14}px` }}
                 aria-expanded={isDirectory ? isOpen : undefined}
                 aria-current={selectedPath === entry.relativePath ? "true" : undefined}
-                onClick={() =>
-                  isDirectory ? toggleDirectory(entry) : setSelectedPath(entry.relativePath)
-                }
+                aria-selected={isDirectory ? undefined : selectedPath === entry.relativePath}
+                title={entry.relativePath}
+                onClick={() => {
+                  if (isDirectory) {
+                    toggleDirectory(entry);
+                    return;
+                  }
+
+                  setSelectedPath(entry.relativePath);
+                  onOpenFile(entry.relativePath);
+                }}
               >
                 <span className="tree-row__chevron">
                   {canExpand ? (
