@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import type { DesignCanvas } from "./designSet";
+import type { DesignCanvas, RemovedCanvas } from "./designSet";
 import type { DesignSaveStatus } from "./designStorage";
 import type { CanvasNode } from "./model";
 
@@ -10,13 +10,13 @@ export type DesignWorkspace = {
   saveStatus: DesignSaveStatus;
   canDeleteCanvas: boolean;
   atCanvasLimit: boolean;
-  deletedCanvas: DesignCanvas | null;
+  deletedCanvases: readonly RemovedCanvas[];
   createCanvas: () => void;
   selectCanvas: (id: string) => void;
   renameCanvas: (id: string, name: string) => void;
   deleteCanvas: (id: string) => void;
-  undoDelete: () => void;
-  dismissDeleted: () => void;
+  undoDelete: (id: string) => void;
+  dismissDelete: (id: string) => void;
   updateCanvasRoot: (id: string, root: CanvasNode) => void;
 };
 

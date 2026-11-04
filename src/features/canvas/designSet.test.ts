@@ -14,6 +14,7 @@ import {
   removeCanvas,
   renameCanvas,
   replaceCanvasRoot,
+  restoreCanvas,
   selectCanvas,
   type DesignSet,
 } from "./designSet";
@@ -96,6 +97,32 @@ describe("design canvas sets", () => {
       set.canvases.map((canvas) => canvas.id),
     );
     expect(restored.activeId).toBe(middle.id);
+  });
+
+  it("restores deleted canvases around their surviving neighbours", () => {
+    let set = createCanvasSet();
+    set = addCanvas(set);
+    set = addCanvas(set);
+    const [, second, third] = set.canvases;
+
+    const removedSecond = removeCanvas(set, second.id);
+    const removedThird = removeCanvas(removedSecond.set, third.id);
+
+    expect(removedSecond.removed).toMatchObject({
+      previousId: set.canvases[0].id,
+      nextId: third.id,
+    });
+    expect(removedThird.removed).toMatchObject({ previousId: set.canvases[0].id, nextId: null });
+
+    const secondBack = restoreCanvas(removedThird.set, removedSecond.removed!);
+    const thirdBack = restoreCanvas(secondBack, removedThird.removed!);
+
+    expect(thirdBack.canvases.map((canvas) => canvas.name)).toEqual([
+      "Canvas 1",
+      "Canvas 2",
+      "Canvas 3",
+    ]);
+    expect(thirdBack.activeId).toBe(third.id);
   });
 
   it("rejects duplicate and excess canvas inserts", () => {

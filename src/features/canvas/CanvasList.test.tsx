@@ -155,7 +155,7 @@ describe("CanvasList", () => {
       expect(loadDesignSet(PROJECT.path).set.canvases).toHaveLength(1);
     });
 
-    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await user.click(screen.getByRole("button", { name: "Undo deleting Canvas 2" }));
 
     expect(screen.getByTestId("canvas-count")).toHaveTextContent("2");
     expect(screen.getByTestId("active-canvas")).toHaveTextContent("Canvas 2");
@@ -173,10 +173,41 @@ describe("CanvasList", () => {
     await user.click(screen.getByRole("button", { name: "New canvas" }));
     await user.click(screen.getByRole("button", { name: "Delete Canvas 2" }));
     await user.click(screen.getByRole("button", { name: "Delete canvas" }));
-    await user.click(screen.getByRole("button", { name: "Dismiss notification" }));
+    await user.click(screen.getByRole("button", { name: "Dismiss notification for Canvas 2" }));
 
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(screen.getByTestId("canvas-count")).toHaveTextContent("1");
+  });
+
+  it("keeps several deleted canvases recoverable independently", async () => {
+    const user = userEvent.setup();
+    renderList();
+
+    await user.click(screen.getByRole("button", { name: "New canvas" }));
+    await user.click(screen.getByRole("button", { name: "New canvas" }));
+    await user.click(screen.getByRole("button", { name: "Delete Canvas 2" }));
+    await user.click(screen.getByRole("button", { name: "Delete canvas" }));
+    await user.click(screen.getByRole("button", { name: "Delete Canvas 3" }));
+    await user.click(screen.getByRole("button", { name: "Delete canvas" }));
+
+    expect(screen.getAllByRole("status")).toHaveLength(2);
+    expect(screen.getByTestId("canvas-count")).toHaveTextContent("1");
+
+    await user.click(screen.getByRole("button", { name: "Undo deleting Canvas 2" }));
+
+    expect(screen.getByTestId("canvas-count")).toHaveTextContent("2");
+    expect(screen.getByTestId("active-canvas")).toHaveTextContent("Canvas 2");
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(screen.getByRole("status")).toHaveTextContent("“Canvas 3” deleted.");
+
+    await user.click(screen.getByRole("button", { name: "Undo deleting Canvas 3" }));
+
+    expect(screen.getByTestId("canvas-count")).toHaveTextContent("3");
+    expect(screen.queryAllByRole("status")).toHaveLength(0);
+    await waitFor(() => {
+      const names = loadDesignSet(PROJECT.path).set.canvases.map((canvas) => canvas.name);
+      expect(names).toEqual(["Canvas 1", "Canvas 2", "Canvas 3"]);
+    });
   });
 
   it("disables deleting the last canvas", () => {

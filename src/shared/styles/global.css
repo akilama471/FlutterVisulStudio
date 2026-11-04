@@ -1465,13 +1465,22 @@ ul {
   padding: 16px 20px;
 }
 
-/* Canvas delete toast */
+/* Canvas delete notifications */
 
-.canvas-toast {
+.canvas-toasts {
   position: fixed;
   bottom: calc(var(--size-status-bar) + 14px);
   left: 50%;
   z-index: 110;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  max-width: calc(100vw - 32px);
+  transform: translateX(-50%);
+}
+
+.canvas-toast {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1481,7 +1490,6 @@ ul {
   border-radius: var(--radius-pill);
   background: var(--color-bg-elevated);
   box-shadow: var(--shadow-popover);
-  transform: translateX(-50%);
 }
 
 .canvas-toast__message {

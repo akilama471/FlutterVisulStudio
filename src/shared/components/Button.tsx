@@ -9,6 +9,7 @@ type ButtonProps = {
   icon?: IconName;
   className?: string;
   title?: string;
+  ariaLabel?: string;
 };
 
 export function Button({
@@ -19,11 +20,19 @@ export function Button({
   icon,
   className,
   title,
+  ariaLabel,
 }: ButtonProps) {
   const classes = ["button", `button--${variant}`, className].filter(Boolean).join(" ");
 
   return (
-    <button type="button" className={classes} onClick={onClick} disabled={disabled} title={title}>
+    <button
+      type="button"
+      className={classes}
+      aria-label={ariaLabel}
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+    >
       {icon ? <Icon name={icon} size={15} /> : null}
       <span>{children}</span>
     </button>

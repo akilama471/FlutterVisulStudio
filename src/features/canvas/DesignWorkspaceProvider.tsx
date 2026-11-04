@@ -2,14 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import type { ProjectInfo } from "../../shared/lib/project";
 import {
   addCanvas,
-  insertCanvas,
   MAX_CANVASES,
   removeCanvas,
   renameCanvas as renameCanvasInSet,
   replaceCanvasRoot,
+  restoreCanvas,
   selectCanvas,
-  type DesignCanvas,
   type DesignSet,
+  type RemovedCanvas,
 } from "./designSet";
 import {
   clearLegacyDesign,
@@ -21,19 +21,13 @@ import { DesignWorkspaceContext, type DesignWorkspace } from "./designWorkspaceC
 import type { CanvasNode } from "./model";
 
 const AUTOSAVE_DELAY = 250;
-const UNDO_WINDOW = 10_000;
-
-type DeletedCanvas = {
-  canvas: DesignCanvas;
-  index: number;
-};
 
 type WorkspaceState = {
   set: DesignSet;
   dirty: boolean;
   status: DesignSaveStatus;
   legacy: boolean;
-  deleted: DeletedCanvas | null;
+  deleted: RemovedCanvas[];
 };
 
 type DesignWorkspaceProviderProps = {
@@ -48,7 +42,7 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
     dirty: initial.status !== "restored",
     status: initial.status === "restored" ? "saved" : "saving",
     legacy: initial.status === "migrated",
-    deleted: null,
+    deleted: [],
   }));
   const stateRef = useRef(state);
 
@@ -93,18 +87,6 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
       }
     };
   }, [project.path]);
-
-  useEffect(() => {
-    if (!state.deleted) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setState((current) => (current.deleted ? { ...current, deleted: null } : current));
-    }, UNDO_WINDOW);
-
-    return () => window.clearTimeout(timer);
-  }, [state.deleted]);
 
   const createCanvas = useCallback(() => {
     setState((current) => {
@@ -151,29 +133,41 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
         set: result.set,
         dirty: true,
         status: "saving",
-        deleted: result.removed,
+        deleted: [result.removed, ...current.deleted],
       };
     });
   }, []);
 
-  const undoDelete = useCallback(() => {
+  const undoDelete = useCallback((id: string) => {
     setState((current) => {
-      if (!current.deleted) {
+      const pending = current.deleted.find((entry) => entry.canvas.id === id);
+
+      if (!pending) {
         return current;
       }
 
-      const set = insertCanvas(current.set, current.deleted.canvas, current.deleted.index);
+      const set = restoreCanvas(current.set, pending);
 
       if (set === current.set) {
         return current;
       }
 
-      return { ...current, set, dirty: true, status: "saving", deleted: null };
+      return {
+        ...current,
+        set,
+        dirty: true,
+        status: "saving",
+        deleted: current.deleted.filter((entry) => entry.canvas.id !== id),
+      };
     });
   }, []);
 
-  const dismissDeleted = useCallback(() => {
-    setState((current) => (current.deleted ? { ...current, deleted: null } : current));
+  const dismissDelete = useCallback((id: string) => {
+    setState((current) => {
+      const deleted = current.deleted.filter((entry) => entry.canvas.id !== id);
+
+      return deleted.length === current.deleted.length ? current : { ...current, deleted };
+    });
   }, []);
 
   const updateCanvasRoot = useCallback((id: string, root: CanvasNode) => {
@@ -199,20 +193,20 @@ export function DesignWorkspaceProvider({ project, children }: DesignWorkspacePr
       saveStatus: state.status,
       canDeleteCanvas: state.set.canvases.length > 1,
       atCanvasLimit: state.set.canvases.length >= MAX_CANVASES,
-      deletedCanvas: state.deleted?.canvas ?? null,
+      deletedCanvases: state.deleted,
       createCanvas,
       selectCanvas: selectCanvasInSet,
       renameCanvas,
       deleteCanvas,
       undoDelete,
-      dismissDeleted,
+      dismissDelete,
       updateCanvasRoot,
     }),
     [
       activeCanvas,
       createCanvas,
       deleteCanvas,
-      dismissDeleted,
+      dismissDelete,
       renameCanvas,
       selectCanvasInSet,
       state.deleted,

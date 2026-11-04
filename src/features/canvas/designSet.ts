@@ -18,6 +18,8 @@ export type DesignSet = {
 export type RemovedCanvas = {
   canvas: DesignCanvas;
   index: number;
+  previousId: string | null;
+  nextId: string | null;
 };
 
 let canvasSequence = 0;
@@ -108,11 +110,16 @@ export function removeCanvas(
   }
 
   const removed = set.canvases[index];
+  const previousId = index > 0 ? set.canvases[index - 1].id : null;
+  const nextId = index < set.canvases.length - 1 ? set.canvases[index + 1].id : null;
   const canvases = set.canvases.filter((canvas) => canvas.id !== id);
   const activeId =
     set.activeId === id ? canvases[Math.min(index, canvases.length - 1)].id : set.activeId;
 
-  return { set: { canvases, activeId }, removed: { canvas: removed, index } };
+  return {
+    set: { canvases, activeId },
+    removed: { canvas: removed, index, previousId, nextId },
+  };
 }
 
 export function insertCanvas(set: DesignSet, canvas: DesignCanvas, index: number): DesignSet {
@@ -124,6 +131,25 @@ export function insertCanvas(set: DesignSet, canvas: DesignCanvas, index: number
   const canvases = [...set.canvases.slice(0, at), canvas, ...set.canvases.slice(at)];
 
   return { canvases, activeId: canvas.id };
+}
+
+export function restoreCanvas(set: DesignSet, removed: RemovedCanvas): DesignSet {
+  const nextIndex = removed.nextId
+    ? set.canvases.findIndex((canvas) => canvas.id === removed.nextId)
+    : -1;
+  const previousIndex = removed.previousId
+    ? set.canvases.findIndex((canvas) => canvas.id === removed.previousId)
+    : -1;
+  const index =
+    removed.nextId === null
+      ? set.canvases.length
+      : nextIndex >= 0
+        ? nextIndex
+        : previousIndex >= 0
+          ? previousIndex + 1
+          : removed.index;
+
+  return insertCanvas(set, removed.canvas, index);
 }
 
 export function replaceCanvasRoot(set: DesignSet, id: string, root: CanvasNode): DesignSet {
