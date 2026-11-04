@@ -3,6 +3,7 @@ use std::{
     fs,
     path::{Component, Path, PathBuf},
     sync::Mutex,
+    time::UNIX_EPOCH,
 };
 use tauri::State;
 
@@ -16,6 +17,10 @@ const OUTSIDE_PROJECT_ERROR: &str = "That location is outside the open project."
 const READ_ERROR: &str = "The file could not be read.";
 const WRITE_ERROR: &str = "The file could not be written.";
 const INVALID_FILE_PATH: &str = "Only Dart files inside the project's lib folder can be used.";
+const INVALID_TEXT_PATH: &str = "That path is not an editable project file.";
+const NOT_TEXT_FILE: &str = "Only UTF-8 text files can be opened.";
+const FILE_CHANGED: &str = "The file changed on disk. Reload it before saving.";
+const FILE_MISSING: &str = "The file no longer exists.";
 const FILE_TOO_LARGE: &str = "The file is too large to read or write.";
 const MAX_FILE_BYTES: usize = 1024 * 1024;
 
@@ -54,6 +59,32 @@ pub struct ProjectWriteResult {
     pub relative_path: String,
     pub backup_path: Option<String>,
     pub bytes: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectTextFile {
+    pub relative_path: String,
+    pub contents: String,
+    pub bytes: usize,
+    pub modified_ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectTextFileStat {
+    pub relative_path: String,
+    pub bytes: usize,
+    pub modified_ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectTextWriteResult {
+    pub relative_path: String,
+    pub backup_path: Option<String>,
+    pub bytes: usize,
+    pub modified_ms: u64,
 }
 
 #[tauri::command]
@@ -117,6 +148,56 @@ pub fn write_project_file(
         .ok_or_else(|| NO_PROJECT_ERROR.to_owned())?;
 
     write_project_file_to(root, &relative_path, &contents)
+}
+
+#[tauri::command]
+pub fn read_project_text_file(
+    state: State<'_, ProjectState>,
+    relative_path: String,
+) -> Result<ProjectTextFile, String> {
+    let active_root = state
+        .root
+        .lock()
+        .map_err(|_| "The project state is unavailable.".to_owned())?;
+    let root = active_root
+        .as_deref()
+        .ok_or_else(|| NO_PROJECT_ERROR.to_owned())?;
+
+    read_text_file_from(root, &relative_path)
+}
+
+#[tauri::command]
+pub fn stat_project_text_file(
+    state: State<'_, ProjectState>,
+    relative_path: String,
+) -> Result<ProjectTextFileStat, String> {
+    let active_root = state
+        .root
+        .lock()
+        .map_err(|_| "The project state is unavailable.".to_owned())?;
+    let root = active_root
+        .as_deref()
+        .ok_or_else(|| NO_PROJECT_ERROR.to_owned())?;
+
+    stat_text_file_from(root, &relative_path)
+}
+
+#[tauri::command]
+pub fn write_project_text_file(
+    state: State<'_, ProjectState>,
+    relative_path: String,
+    contents: String,
+    expected_modified_ms: Option<u64>,
+) -> Result<ProjectTextWriteResult, String> {
+    let active_root = state
+        .root
+        .lock()
+        .map_err(|_| "The project state is unavailable.".to_owned())?;
+    let root = active_root
+        .as_deref()
+        .ok_or_else(|| NO_PROJECT_ERROR.to_owned())?;
+
+    write_text_file_to(root, &relative_path, &contents, expected_modified_ms)
 }
 
 #[tauri::command]
@@ -451,6 +532,164 @@ fn next_backup_path(path: &Path) -> Result<PathBuf, String> {
     }
 
     Err(WRITE_ERROR.to_owned())
+}
+
+fn resolve_text_file_target(root: &Path, relative_path: &str) -> Result<ProjectFileTarget, String> {
+    let relative = Path::new(relative_path);
+
+    if relative.as_os_str().is_empty() || relative.is_absolute() {
+        return Err(INVALID_TEXT_PATH.to_owned());
+    }
+
+    let mut components = Vec::new();
+    for component in relative.components() {
+        match component {
+            Component::Normal(value) => {
+                let value = value.to_string_lossy();
+                if IGNORED_DIRECTORIES
+                    .iter()
+                    .any(|ignored| value.eq_ignore_ascii_case(ignored))
+                {
+                    return Err(INVALID_TEXT_PATH.to_owned());
+                }
+                components.push(value.into_owned());
+            }
+            _ => return Err(INVALID_TEXT_PATH.to_owned()),
+        }
+    }
+
+    if components.is_empty() {
+        return Err(INVALID_TEXT_PATH.to_owned());
+    }
+
+    let normalized = components.join("/");
+    let path = root.join(&normalized);
+    let canonical = match path.canonicalize() {
+        Ok(canonical) => canonical,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(FILE_MISSING.to_owned())
+        }
+        Err(_) => return Err(UNAVAILABLE_ERROR.to_owned()),
+    };
+
+    if !canonical.starts_with(root) {
+        return Err(OUTSIDE_PROJECT_ERROR.to_owned());
+    }
+    if !canonical.is_file() {
+        return Err(INVALID_TEXT_PATH.to_owned());
+    }
+
+    Ok(ProjectFileTarget {
+        relative_path: normalized,
+        path,
+        exists: true,
+    })
+}
+
+fn read_text_file_from(root: &Path, relative_path: &str) -> Result<ProjectTextFile, String> {
+    let target = resolve_text_file_target(root, relative_path)?;
+    let metadata = fs::metadata(&target.path).map_err(|error| {
+        eprintln!("failed to inspect project text file: {error}");
+        UNAVAILABLE_ERROR.to_owned()
+    })?;
+
+    if metadata.len() > MAX_FILE_BYTES as u64 {
+        return Err(FILE_TOO_LARGE.to_owned());
+    }
+
+    let bytes = fs::read(&target.path).map_err(|error| {
+        eprintln!("failed to read project text file: {error}");
+        READ_ERROR.to_owned()
+    })?;
+
+    if bytes.len() > MAX_FILE_BYTES {
+        return Err(FILE_TOO_LARGE.to_owned());
+    }
+
+    let contents = String::from_utf8(bytes).map_err(|_| NOT_TEXT_FILE.to_owned())?;
+
+    if contents.contains('\0') {
+        return Err(NOT_TEXT_FILE.to_owned());
+    }
+
+    Ok(ProjectTextFile {
+        relative_path: target.relative_path,
+        bytes: contents.len(),
+        modified_ms: modified_ms(&metadata),
+        contents,
+    })
+}
+
+fn stat_text_file_from(root: &Path, relative_path: &str) -> Result<ProjectTextFileStat, String> {
+    let target = resolve_text_file_target(root, relative_path)?;
+    let metadata = fs::metadata(&target.path).map_err(|error| {
+        eprintln!("failed to inspect project text file: {error}");
+        UNAVAILABLE_ERROR.to_owned()
+    })?;
+
+    Ok(ProjectTextFileStat {
+        relative_path: target.relative_path,
+        bytes: metadata.len() as usize,
+        modified_ms: modified_ms(&metadata),
+    })
+}
+
+fn write_text_file_to(
+    root: &Path,
+    relative_path: &str,
+    contents: &str,
+    expected_modified_ms: Option<u64>,
+) -> Result<ProjectTextWriteResult, String> {
+    if contents.len() > MAX_FILE_BYTES {
+        return Err(FILE_TOO_LARGE.to_owned());
+    }
+    if contents.contains('\0') {
+        return Err(NOT_TEXT_FILE.to_owned());
+    }
+
+    let target = resolve_text_file_target(root, relative_path)?;
+    let metadata = fs::metadata(&target.path).map_err(|error| {
+        eprintln!("failed to inspect project text file: {error}");
+        UNAVAILABLE_ERROR.to_owned()
+    })?;
+
+    if let Some(expected) = expected_modified_ms {
+        if modified_ms(&metadata) != expected {
+            return Err(FILE_CHANGED.to_owned());
+        }
+    }
+
+    let backup = next_backup_path(&target.path)?;
+    fs::copy(&target.path, &backup).map_err(|error| {
+        eprintln!("failed to back up project text file: {error}");
+        WRITE_ERROR.to_owned()
+    })?;
+
+    fs::write(&target.path, contents.as_bytes()).map_err(|error| {
+        eprintln!("failed to write project text file: {error}");
+        WRITE_ERROR.to_owned()
+    })?;
+
+    let updated = fs::metadata(&target.path).map_err(|error| {
+        eprintln!("failed to inspect written project text file: {error}");
+        WRITE_ERROR.to_owned()
+    })?;
+
+    Ok(ProjectTextWriteResult {
+        relative_path: target.relative_path,
+        backup_path: Some(relative_path_string(&backup, root)),
+        bytes: contents.len(),
+        modified_ms: modified_ms(&updated),
+    })
+}
+
+fn modified_ms(metadata: &fs::Metadata) -> u64 {
+    metadata
+        .modified()
+        .ok()
+        .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 fn has_visible_child(directory: &Path) -> bool {
@@ -794,6 +1033,135 @@ mod tests {
             write_project_file_to(&root, "lib/main.dart", &contents)
                 .expect_err("oversized write should be rejected"),
             FILE_TOO_LARGE
+        );
+    }
+
+    #[test]
+    fn reads_and_stats_text_files_anywhere_in_the_project() {
+        let project = flutter_project("text-file");
+        project.write("README.md", "# Fixture\n");
+        let root = canonical_root(&project);
+
+        let file = read_text_file_from(&root, "README.md").expect("text should be readable");
+        let stat = stat_text_file_from(&root, "README.md").expect("text should be statable");
+
+        assert_eq!(file.relative_path, "README.md");
+        assert_eq!(file.contents, "# Fixture\n");
+        assert_eq!(file.bytes, 10);
+        assert_eq!(stat.bytes, 10);
+        assert_eq!(stat.modified_ms, file.modified_ms);
+        assert!(file.modified_ms > 0);
+    }
+
+    #[test]
+    fn rejects_binary_and_non_utf8_text_files() {
+        let project = flutter_project("binary-file");
+        let path = project.path.join("image.bin");
+        fs::write(&path, [0xff, 0xfe, 0x00, 0x01]).expect("binary fixture should be written");
+        fs::write(project.path.join("nul-byte.txt"), b"hello\0world")
+            .expect("nul fixture should be written");
+        let root = canonical_root(&project);
+
+        assert_eq!(
+            read_text_file_from(&root, "image.bin").expect_err("invalid UTF-8 should be rejected"),
+            NOT_TEXT_FILE
+        );
+        assert_eq!(
+            read_text_file_from(&root, "nul-byte.txt").expect_err("NUL should be rejected"),
+            NOT_TEXT_FILE
+        );
+    }
+
+    #[test]
+    fn rejects_ignored_and_outside_text_paths() {
+        let project = flutter_project("text-paths");
+        project.write(".git/config", "ignored\n");
+        project.write("build/output.txt", "ignored\n");
+        project.write("lib/notes.txt", "notes\n");
+        let root = canonical_root(&project);
+
+        for relative_path in [
+            "",
+            "../README.md",
+            "lib/../../README.md",
+            ".git/config",
+            "build/output.txt",
+            "missing.txt",
+        ] {
+            assert!(
+                read_text_file_from(&root, relative_path).is_err(),
+                "expected {relative_path:?} to be rejected"
+            );
+        }
+
+        assert_eq!(
+            read_text_file_from(&root, "lib/notes.txt")
+                .expect("ordinary text should be readable")
+                .contents,
+            "notes\n"
+        );
+    }
+
+    #[test]
+    fn writes_text_files_with_backups_and_conflict_checks() {
+        let project = flutter_project("text-write");
+        project.write("README.md", "old\n");
+        let root = canonical_root(&project);
+        let baseline = stat_text_file_from(&root, "README.md")
+            .expect("fixture should be statable")
+            .modified_ms;
+
+        let result = write_text_file_to(&root, "README.md", "new\n", Some(baseline))
+            .expect("matching baseline should write");
+        assert_eq!(result.backup_path.as_deref(), Some("README.md.bak"));
+        assert_eq!(
+            fs::read_to_string(root.join("README.md")).expect("file should exist"),
+            "new\n"
+        );
+        assert_eq!(
+            fs::read_to_string(root.join("README.md.bak")).expect("backup should exist"),
+            "old\n"
+        );
+
+        assert_eq!(
+            write_text_file_to(&root, "README.md", "stale\n", Some(baseline))
+                .expect_err("stale baseline should conflict"),
+            FILE_CHANGED
+        );
+        assert_eq!(
+            fs::read_to_string(root.join("README.md")).expect("file should remain"),
+            "new\n"
+        );
+
+        let forced = write_text_file_to(&root, "README.md", "forced\n", None)
+            .expect("forced write should succeed");
+        assert_eq!(forced.backup_path.as_deref(), Some("README.md.bak.1"));
+        assert_eq!(
+            fs::read_to_string(root.join("README.md")).expect("forced file should exist"),
+            "forced\n"
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_text_writes() {
+        let project = flutter_project("invalid-text-write");
+        project.write("README.md", "old\n");
+        let root = canonical_root(&project);
+
+        assert_eq!(
+            write_text_file_to(&root, "README.md", "hello\0world", None)
+                .expect_err("NUL should be rejected"),
+            NOT_TEXT_FILE
+        );
+        assert_eq!(
+            write_text_file_to(&root, "README.md", &"x".repeat(MAX_FILE_BYTES + 1), None)
+                .expect_err("oversized write should be rejected"),
+            FILE_TOO_LARGE
+        );
+        assert_eq!(
+            write_text_file_to(&root, "missing.md", "new\n", None)
+                .expect_err("missing targets should be rejected"),
+            FILE_MISSING
         );
     }
 }

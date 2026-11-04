@@ -2,7 +2,8 @@ mod commands;
 
 use commands::{
     app_info, close_project, list_project_directory, open_project, read_project_file,
-    write_project_file, ProjectState,
+    read_project_text_file, stat_project_text_file, write_project_file, write_project_text_file,
+    ProjectState,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -16,6 +17,9 @@ pub fn run() {
             list_project_directory,
             read_project_file,
             write_project_file,
+            read_project_text_file,
+            stat_project_text_file,
+            write_project_text_file,
             close_project
         ])
         .run(tauri::generate_context!())
