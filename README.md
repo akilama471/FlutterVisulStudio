@@ -272,10 +272,6 @@ If you find Flutter UI Studio useful:
 
 ------------------------------------------------------------------------
 
-```{=html}
 <p align="center">
-```
 Made with ❤️ for the Flutter developer community.
-```{=html}
 </p>
-```
